@@ -169,6 +169,40 @@ var Cap = (function () {
     return newYears;
   }
 
+  // Restructure: convert this year's base salary (above the minimum) into a signing bonus prorated over
+  // the remaining real contract years (max 5). Saves cap now, pushes it to later years.
+  function restructureMax(p, year, exp) {
+    var r = row(p, year);
+    if (!r || r.void || yearsLeft(p, year) < 2) return 0;
+    return Math.max(0, r.base - minSalary(exp, year));
+  }
+  function restructure(p, year, amount, exp) {
+    var amt = Math.min(Math.max(0, amount | 0), restructureMax(p, year, exp));
+    if (!amt) return { saved: 0 };
+    var real = remaining(p, year).filter(function (x) { return !x.void; });
+    var n = Math.min(MAX_PRORATION_YEARS, real.length), per = Math.floor(amt / n), left = amt;
+    var r = row(p, year);
+    r.base -= amt;
+    r.gtd = Math.max(0, r.gtd - amt);   // guaranteed salary is now paid as bonus
+    for (var i = 0; i < n; i++) { var add = i === n - 1 ? left : per; real[i].pro += add; left -= add; recalc(real[i]); }
+    return { saved: amt - per, amount: amt, years: n };
+  }
+
+  // Pre-pay: move future base salary into this year (renegotiated raise now, pay cut later). Uses cap
+  // space now and frees it later; how teams with lots of room avoid wasting it.
+  function prepay(p, year, amount, exp) {
+    var rows = remaining(p, year).filter(function (r) { return !r.void; });
+    var cur = rows[0]; if (!cur || rows.length < 2) return 0;
+    var moved = 0;
+    for (var i = rows.length - 1; i > 0 && moved < amount; i--) {
+      var r = rows[i], room = r.base - minSalary((exp | 0) + i, r.y);
+      var m = Math.min(room, amount - moved);
+      if (m > 0) { r.base -= m; r.gtd = Math.min(r.gtd, r.base); recalc(r); moved += m; }
+    }
+    cur.base += moved; recalc(cur);
+    return moved;
+  }
+
   function apy(years) { var real = years.filter(function (r) { return !r.void; }); return real.length ? Math.round(sum(years, function (r) { return r.cap; }) / real.length) : 0; }
 
   // ---- Team totals ----
@@ -209,7 +243,7 @@ var Cap = (function () {
     contractValueLeft: contractValueLeft, releaseCost: releaseCost, applyDead: applyDead, tradeCost: tradeCost,
     buildContract: buildContract, buildExtension: buildExtension, apy: apy, teamCap: teamCap,
     teamCommitted: teamCommitted, teamDead: teamDead, capSpace: capSpace, leagueCap: leagueCap, rollover: rollover,
-    rookieDeal: rookieDeal, exerciseOptions: exerciseOptions, voidAcceleration: voidAcceleration, recalc: recalc, MAX_PRORATION_YEARS: MAX_PRORATION_YEARS, MIN_ROSTER_FOR_SEASON: MIN_ROSTER_FOR_SEASON
+    rookieDeal: rookieDeal, restructure: restructure, prepay: prepay, restructureMax: restructureMax, exerciseOptions: exerciseOptions, voidAcceleration: voidAcceleration, recalc: recalc, MAX_PRORATION_YEARS: MAX_PRORATION_YEARS, MIN_ROSTER_FOR_SEASON: MIN_ROSTER_FOR_SEASON
   };
 })();
 if (typeof module !== 'undefined') module.exports = Cap;

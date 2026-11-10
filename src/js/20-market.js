@@ -26,11 +26,24 @@ var Market = (function () {
     return clamp(Math.round(o), 30, 99);
   }
 
-  function talentCurve(ovr) { return Math.pow(clamp((ovr - 55) / 42, 0, 1), 1.6); }
+  // fitted so pay by rating tracks real APY by positional rank (e.g. WR: 95 ~ $34M, 90 ~ $25M, 80 ~ $10M, 70 ~ $2.5M)
+  function talentCurve(ovr) { return Math.pow(clamp((ovr - 55) / 42, 0, 1), 2.6); }
 
   // Fair yearly salary for a player at a given overall, in a league year with cap `cap`.
+  var scale = 1;   // league-wide pay level, calibrated at new game so total demand ~ total cap
+  function setScale(x) { scale = x; }
   function valueAt(pos, ovr, cap, exp, year) {
-    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * TOP_SHARE[pos] * talentCurve(ovr)));
+    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * TOP_SHARE[pos] * talentCurve(ovr) * scale));
+  }
+  // Pick the scale so the best 53 x 32 players' fair salaries add up to `share` of all 32 caps.
+  function calibrate(players, cap, year, share) {
+    scale = 1;
+    var best = players.slice().sort(function (a, b) { return b.ovr - a.ovr; }).slice(0, 53 * 32);
+    var tot = 0;
+    best.forEach(function (p) { tot += valueAt(p.pos, p.ovr, cap, p.exp, year); });
+    var mins = best.length * Cap.minSalary(3, year);
+    scale = Math.max(0.5, (share * 32 * cap - mins) / Math.max(1, tot - mins));
+    return scale;
   }
 
   // What the player asks for. Uses the next two seasons' expected rating (teams pay for the future).
@@ -74,7 +87,7 @@ var Market = (function () {
     var win = (ctx.teamOvr - 75) / 100 * (p.age >= 29 ? 1.6 : 0.7);
     mood += win;
     if (ctx.isOwnTeam) mood += 0.02;                         // small loyalty bump
-    if (ctx.fa) mood += Math.min(0.12, (ctx.daysIntoFA || 0) * 0.012); // asking price softens as FA drags on
+    if (ctx.fa) mood += faDiscount(ctx.daysIntoFA);           // asking price softens as FA drags on
     mood -= (ctx.rejections || 0) * 0.02;                    // repeated lowballs annoy
     var threshold = 1 + noise(p.id, ctx.year) * 0.03;
     var notes = [
@@ -85,6 +98,9 @@ var Market = (function () {
     ];
     return { accept: mood >= threshold, mood: mood / threshold, ask: d, notes: notes };
   }
+
+  // How far a free agent's price has dropped after `days` of free agency (0 at open, ~40% late).
+  function faDiscount(days) { return Math.min(0.25, Math.max(0, days || 0) * 0.045); }
 
   // ---- trade values, in "surplus $K" ----
   var DISCOUNT = 0.85;
@@ -115,6 +131,6 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve };
+           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, calibrate: calibrate, getScale: function () { return scale; } };
 })();
 if (typeof module !== 'undefined') module.exports = Market;

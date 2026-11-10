@@ -129,6 +129,22 @@ console.log('Team cap, dead money, rollover (Patriots)');
   eq('rollover carries unused space', Cap.teamCap(ne, 2028), Cap.leagueCap(data.meta.cap, Y, 2028) + left);
 }
 
+// ---------- 4b. Restructure ----------
+console.log('Restructure (Milton Williams)');
+{
+  const w = JSON.parse(JSON.stringify(byId[otc['Milton Williams'].gsis]));
+  const totalBefore = w.years.reduce((s, r) => s + r.cap, 0), hitBefore = Cap.capHit(w, Y);
+  const max = Cap.restructureMax(w, Y, w.exp);
+  const r = Cap.restructure(w, Y, max, w.exp);
+  const n = Cap.yearsLeft(w, Y);
+  eq('saves amount minus one year of proration', hitBefore - Cap.capHit(w, Y), r.saved);
+  eq('savings = amt * (n-1)/n', r.saved, max - Math.floor(max / Math.min(5, n)));
+  eq('total cap over the deal unchanged', w.years.reduce((s, x) => s + x.cap, 0), totalBefore);
+  ok('base never below minimum', Cap.row(w, Y).base >= Cap.minSalary(w.exp, Y));
+  ok('dead money rises after restructure', Cap.releaseCost(w, Y, false).dead[Y] > 12000);
+  console.log('  restructured', M(max), 'over', n, 'yrs: saves', M(r.saved), 'in 2027');
+}
+
 // ---------- 5. Rookie scale ----------
 console.log('Rookie scale');
 {
