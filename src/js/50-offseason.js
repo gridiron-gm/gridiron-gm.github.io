@@ -37,7 +37,6 @@ function advance() {
       S.phase = 'season';                      // top-51 rule ends: every contract counts now
       aiTeams().forEach(function (a) { aiCapFix(a, 500); });
       aiPrepay(15000);
-      S.week1Space = sumBy(aiTeams().filter(function (a) { return a !== S.user; }), function (a) { return space(a); }) / 31;
       resetSeason();
       break;
     case 'season':
@@ -121,6 +120,7 @@ function makePick(k, p) {
   p.team = null;
   var yrs = Cap.buildContract(deal, S.year, 0);
   p.team = k.owner; p.years = yrs; p.apy = Cap.apy(yrs); p.gtdTotal = deal.gtd; p.signed = S.year;
+  p.mv = Market.initialMarketShare(p, k.no);
   S.draft.made.push({ no: k.no, round: k.round, team: k.owner, id: p.id });
   S.draft.i++;
   if (k.owner === S.user || k.round === 1) news('Pick ' + k.no + ': ' + k.owner + ' select ' + p.pos + ' ' + p.name + ' (' + p.college + ').', k.owner);
@@ -246,18 +246,6 @@ function endOfYear() {
   S.optTables = S.optTables || {};
   S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);
   var perf = performanceDeltas();
-  // market inflation: if teams sat on lots of unused room this year, next year's asking prices rise
-  if (S.week1Space != null && !S.freezePay) {
-    var slack = S.week1Space / capOf(Y) - 0.03;
-    // look ahead too: money already free next year (expiring deals) beyond a normal ~30% of the cap
-    var ai = aiTeams().filter(function (a) { return a !== S.user; });
-    var nextFree = sumBy(ai, function (a) { return space(a, Y + 1) + Cap.teamCommitted(S.players, T(a), Y) * 0; }) / ai.length + (sumBy(ai, function (a) { return Math.max(0, space(a, Y)); }) / ai.length);
-    slack = Math.max(slack, (nextFree / capOf(Y + 1) - 0.33) * 0.55);
-    var unsigned = freeAgents().filter(function (p) { return p.ovr >= 80; }).length;
-    if (unsigned > 8) slack = Math.min(slack, -0.06 * Math.min(3, unsigned / 8));
-    S.payScale = clamp(S.payScale * (1 + clamp(slack * 1.5, -0.06, 0.22)), 0.6, 2.5);
-    Market.setScale(S.payScale);
-  }
   // cap rollover into next league year
   TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
   var retired = [];
@@ -270,6 +258,7 @@ function endOfYear() {
       return;
     }
     progress(p, perf[p.id] || 0);
+    Market.driftMarketValue(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;
   });
   updateClassStrength();
@@ -295,24 +284,6 @@ function endOfYear() {
   var exp = S.players.filter(function (p) { return p.rights === S.user; }).length;
   news('The ' + S.year + ' league year begins. ' + exp + ' of your players have expiring contracts. Cap: ' + fmtM(capOf(S.year)) + ' (projected) plus ' + fmtM(S.teams[S.user].rollover[S.year] || 0) + ' rollover.');
 }
-// Market clearing for the new league year: compare the money teams have free with the fair value of
-// everyone who needs a contract (expired deals + free agents good enough to roster), and move the
-// league pay level toward the price that spends it.
-function clearMarket() {
-  var y = S.year;
-  var free = sumBy(TEAMS, function (t) { return Math.max(0, space(t.abbr, y)); });
-  var rostered = S.players.filter(function (p) { return p.team; }).length;
-  var openSlots = Math.max(0, 53 * 32 - rostered - 224);          // minus incoming draft class
-  var pool = S.players.filter(function (p) { return !p.team && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr; }, true)).slice(0, openSlots);
-  var fair = sumBy(pool, function (p) { return Market.valueAt(p.pos, p.ovr, marketCap(), p.exp, y); });
-  var rookies = 32 * 12000 * capOf(y) / capOf(BASE.startYear);
-  var avail = free - rookies - 32 * 6000;                          // teams keep a little room
-  if (fair <= 0 || avail <= 0) return;
-  var ratio = clamp(avail / fair, 0.85, 1.2);
-  S.payScale = clamp(S.payScale * Math.pow(ratio, 0.7), 0.7, 2.2);
-  Market.setScale(S.payScale);
-}
-
 // League talent stays stable through the draft, not by editing existing players: every player's
 // rating moves only for aging and performance. Each offseason, positions with fewer 80+ players
 // than at the start get a stronger incoming class (and vice versa).

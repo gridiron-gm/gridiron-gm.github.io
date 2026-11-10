@@ -26,34 +26,41 @@ var Market = (function () {
     return clamp(Math.round(o), 30, 99);
   }
 
-  // fitted so pay by rating tracks real APY by positional rank (e.g. WR: 95 ~ $34M, 90 ~ $25M, 80 ~ $10M, 70 ~ $2.5M)
-  function talentCurve(ovr) { return Math.pow(clamp((ovr - 55) / 42, 0, 1), 2.6); }
-
-  // Fair yearly salary for a player at a given overall, in a league year with cap `cap`.
-  var scale = 1;   // league-wide pay level, calibrated at new game so total demand ~ total cap
+  // Salary curve (pay by on-field rating), fit in scripts/build_data.py on every current contract,
+  // minimums and rookie deals included, and scaled so a full league's pay fills ~95% of the cap.
+  var CURVE = { a: 60, b: 1.2, L: 0.773, floor: 0.0029 };
+  function setCurve(c) { if (c) CURVE = c; }
+  function talentCurve(ovr) { return Math.pow(clamp((ovr - CURVE.a) / (99 - CURVE.a), 0, 1), CURVE.b); }
+  // rating-based value as a share of the cap
+  function curveShare(pos, ovr) { return CURVE.floor + CURVE.L * TOP_SHARE[pos] * talentCurve(ovr); }
+  var scale = 1;   // kept for old saves; no longer adjusted (market value replaced the pay multiplier)
   function setScale(x) { scale = x; }
   function valueAt(pos, ovr, cap, exp, year) {
-    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * TOP_SHARE[pos] * talentCurve(ovr) * scale));
+    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * curveShare(pos, ovr) * scale));
   }
-  // Pick the scale so the best 53 x 32 players' fair salaries add up to `share` of all 32 caps.
-  function calibrate(players, cap, year, share) {
-    scale = 1;
-    var best = players.slice().sort(function (a, b) { return b.ovr - a.ovr; }).slice(0, 53 * 32);
-    var tot = 0;
-    best.forEach(function (p) { tot += valueAt(p.pos, p.ovr, cap, p.exp, year); });
-    var mins = best.length * Cap.minSalary(3, year);
-    scale = Math.max(0.5, (share * 32 * cap - mins) / Math.max(1, tot - mins));
-    return scale;
+
+  // Market value: what the league thinks a player is worth per year, as a share of the cap. Separate from
+  // the on-field rating. Year 1 comes from real contracts and draft slot (build_data.py); each offseason
+  // it moves a third of the way toward the curve value of his rating and season performance.
+  function marketShare(p) { return p.mv != null ? p.mv : curveShare(p.pos, p.ovr); }
+  function driftMarketValue(p, perf) {
+    var target = curveShare(p.pos, clamp(p.ovr + (perf || 0), 30, 99));
+    p.mv = Math.round((marketShare(p) + (target - marketShare(p)) / 3) * 1e5) / 1e5;
+  }
+  // new players (draft picks, generated depth): draft slot plus rating
+  function initialMarketShare(p, pickNo) {
+    var slot = pickNo ? Cap.rookieDeal(pickNo, 2027, 326900).total / 4 / 326900 : 0;
+    return Math.round(Math.max(curveShare(p.pos, p.ovr), slot) * 1e5) / 1e5;
   }
 
   // What the player asks for. Uses the next two seasons' expected rating (teams pay for the future).
   function demand(p, cap, year) {
     var o = Math.round((projOvr(p, 0) * 2 + projOvr(p, 1)) / 3);
-    var apy = valueAt(p.pos, o, cap, p.exp, year);
+    var apy = Math.max(Cap.minSalary(p.exp, year), Math.round(marketShare(p) * cap * scale));
     var age = p.age;
     var years = age <= 25 ? 5 : age <= 27 ? 4 : age <= 29 ? 3 : age <= 31 ? 2 : 1;
     if (apy < 3000) years = Math.min(years, 2);
-    var gShare = clamp(0.2 + 0.55 * talentCurve(o), 0.05, 0.75);
+    var gShare = clamp(0.25 + 0.5 * Math.min(1, marketShare(p) / TOP_SHARE[p.pos] / 0.6), 0.05, 0.75);
     if (apy <= Cap.minSalary(p.exp, year) + 200) gShare = 0;
     return { apy: apy, years: years, gtd: Math.round(apy * years * gShare), ovrBasis: o };
   }
@@ -108,9 +115,12 @@ var Market = (function () {
     var rows = Cap.remaining(p, year).filter(function (r) { return !r.void; });
     var v = 0;
     var n = Math.max(1, Math.min(4, rows.length));
+    var mvNow = Math.max(Cap.minSalary(p.exp, year), marketShare(p) * cap);
     for (var i = 0; i < n; i++) {
-      var o = projOvr(p, i);
-      var worth = valueAt(p.pos, o, cap * Math.pow(1.07, i), p.exp + i, year + i);
+      var o = projOvr(p, i), capI = cap * Math.pow(1.07, i);
+      // market value now, drifting a third of the way per year toward his projected rating's value
+      var target = valueAt(p.pos, o, capI, p.exp + i, year + i);
+      var worth = target + (mvNow * Math.pow(1.07, i) - target) * Math.pow(2 / 3, i);
       var cost = rows[i] ? rows[i].cap : worth;             // after the deal ends he'd cost market price
       v += Math.pow(DISCOUNT, i) * (worth * 1.15 - cost);   // surplus
       v += Math.pow(DISCOUNT, i) * worth * 0.35;            // you also just get a good player
@@ -131,6 +141,6 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, calibrate: calibrate, getScale: function () { return scale; } };
+           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, initialMarketShare: initialMarketShare };
 })();
 if (typeof module !== 'undefined') module.exports = Market;

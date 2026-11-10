@@ -7,9 +7,10 @@ for (const f of fs.readdirSync(path.join(__dirname, '../src/js')).sort()) {
 }
 const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data.json'), 'utf8'));
 const seasons = +process.argv[2] || 3;
+const seedArg = process.argv.indexOf("--seed") > 0 ? +process.argv[process.argv.indexOf("--seed") + 1] : null;
 let fail = 0;
 const check = (l, c) => { if (!c) { fail++; console.log('  FAIL', l); } };
-vm.runInContext("newGame(DATA, \"NE\"); reindex(); S.autopilot = true; S.freezePay = FREEZE;", Object.assign(ctx, { DATA: data, FREEZE: process.argv[3] === "freeze" }));
+vm.runInContext("newGame(DATA, \"NE\", SEED); reindex(); S.autopilot = true;", Object.assign(ctx, { DATA: data, SEED: seedArg }));
 const t0 = Date.now();
 for (let s = 0; s < seasons; s++) {
   const out = vm.runInContext(`(function(){

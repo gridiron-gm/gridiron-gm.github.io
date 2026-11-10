@@ -7,9 +7,11 @@ var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft',
                     season: 'Regular season', playoffs: 'Playoffs' };
 var ROSTER_MAX_OFF = 90, ROSTER_MAX = 53, FA_DAYS = 6, TRADE_DEADLINE_WEEK = 9;
 
-function newGame(data, userAbbr) {
+// seed: pass a number to make the whole league reproducible (same seed + same choices = same results)
+function newGame(data, userAbbr, seed) {
   BASE = data.meta;
-  S = { v: 1, seed: (Date.now() % 1e9) | 0, year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
+  Market.setCurve(BASE.curve); Market.setScale(1);
+  S = { v: 1, seed: seed != null && seed !== '' && !isNaN(+seed) ? (+seed | 0) : (Date.now() % 1e9) | 0, fixedSeed: seed != null && seed !== '' && !isNaN(+seed), year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
         user: userAbbr, teams: {}, picks: [], players: [], schedule: [], news: [], playoffs: null, history: [],
         draft: null, nextId: 1, june1: {}, lastOrder: null, awards: [] };
   RNG.s = S.seed;
@@ -32,7 +34,7 @@ function newGame(data, userAbbr) {
     S.targetPipe[pos] = S.players.filter(function (p) { return p.pos === pos && Market.projOvr(p, 2) >= 80; }).length;
   });
   // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
-  S.payScale = Market.calibrate(S.players, capOf(S.year), S.year, 0.88);
+  S.payScale = 1;   // pay multiplier retired: market value + the fitted salary curve set prices
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });
   news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
   return S;
