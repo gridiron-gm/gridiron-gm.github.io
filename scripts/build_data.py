@@ -392,6 +392,19 @@ def draft_order(season):
 d_order, d_final, d_games = draft_order(START_YEAR - 1)
 print('draft order', 'final' if d_final else f'provisional ({d_games} of 272 games played)', d_order[:5], '...')
 
+# ---------- hand-edited corrections (data/overrides.csv) ----------
+# nflverse can't tell original-ballot Pro Bowls from alternates, so known corrections live here.
+OVERRIDE_FIELDS = {'pb': int, 'age': int, 'exp': int, 'ovr': int, 'pot': int, 'pos': str, 'team': str}
+ov_path = os.path.join(ROOT, 'data', 'overrides.csv')
+if os.path.exists(ov_path):
+    by_id = {p['id']: p for p in players}
+    for r in csv.DictReader(open(ov_path)):
+        p = by_id.get(r['gsis_id'])
+        if not p: print('override: no player', r['gsis_id'], r['name']); continue
+        if r['field'] not in OVERRIDE_FIELDS: print('override: unknown field', r['field']); continue
+        old = p.get(r['field']); p[r['field']] = OVERRIDE_FIELDS[r['field']](r['value'])
+        print(f"override: {p['name']} {r['field']} {old} -> {p[r['field']]}")
+
 players.sort(key=lambda p: (p['team'] or 'ZZZ', -p['ovr']))
 out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'capProjected': True, 'optTable': opt_table, 'optGroup': OPT_GROUP,
                 'draftOrder': d_order, 'draftOrderFinal': d_final, 'draftOrderGames': d_games, 'rosterFile': ROSTER_FILE,

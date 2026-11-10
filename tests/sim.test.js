@@ -19,12 +19,12 @@ for (let s = 0; s < seasons; s++) {
       if (S.phase === 'preseason') userAutoRoster();
       if (S.phase === 'draft') draftUntilUser(true);
       var r = advance();
-      if (!r.ok) { log.push('blocked: ' + r.msg); userAutoRoster(); if (space(S.user) < 0) { var c = roster(S.user).sort(byKey(function(p){return -Cap.capHit(p,S.year)}))[0]; release(c,true);} }
+      if (!r.ok) { log.push('blocked: ' + r.msg); userAutoRoster(); aiCapFix(S.user, 6000); if (space(S.user) < 0) { var c = roster(S.user).sort(byKey(function(p){return -Cap.capHit(p,S.year)}))[0]; release(c,true);} }
       if (S.phase === 'season' && S.week === 1) {
         log.push('rosters ' + TEAMS.map(function(t){return roster(t.abbr).length}).join(','));
         var over = TEAMS.filter(function(t){return space(t.abbr) < 0}).map(function(t){return t.abbr + ' ' + fmtM(space(t.abbr))});
         log.push('over cap: ' + (over.join('; ') || 'none'));
-        log.push('payScale ' + S.payScale.toFixed(2) + ' week 1 avg space ' + fmtM(sumBy(TEAMS,function(t){return space(t.abbr)})/32) + ', 80+ rostered ' + S.players.filter(function(p){return p.team && p.ovr>=80}).length + ', 80+ unsigned ' + freeAgents().filter(function(p){return p.ovr>=80}).length);
+        log.push('payScale ' + S.payScale.toFixed(2) + ' week 1 avg space ' + fmtM(sumBy(TEAMS,function(t){return space(t.abbr)})/32) + ', 80+ rostered ' + S.players.filter(function(p){return p.team && p.ovr>=80}).length + ', 80+ unsigned ' + freeAgents().filter(function(p){return p.ovr>=80}).length + ', 80+ total ' + S.players.filter(function(p){return !p.retired && !p.prospect && p.ovr>=80}).length + ' (start ' + sumBy(POSITIONS,function(q){return S.target80[q]}) + ')');
       }
     }
     var h = S.history[S.history.length-1];

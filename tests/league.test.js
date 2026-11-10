@@ -15,7 +15,7 @@ run('newGame(DATA, "NE"); reindex();');
 // ---------- fifth-year option ----------
 const maye = run('(function(){ var p = S.players.filter(function(p){return p.name==="Drake Maye"})[0]; return { id: p.id, info: fifthYearInfo(p) }; })()');
 ok('Maye has an open option decision in the 2027 re-sign window', maye.info && maye.info.open && maye.info.year === 2028);
-ok('Maye tier: 2+ Pro Bowls', maye.info.tier === 0);
+ok('Maye tier: 1 original-ballot Pro Bowl (override: 2024 was as an alternate)', maye.info.tier === 1);
 console.log('  Maye 2028 option:', run(`fmtM(${maye.info.amount})`), '-', maye.info.label);
 run('advance(); for (var i = 0; i < 6; i++) advance();');               // through free agency to the draft
 ok('in the draft phase', run('S.phase') === 'draft');
@@ -53,14 +53,16 @@ for (const [id, b] of Object.entries(before)) {
   if (!p) continue;
   const pk = run(`Market.PEAK["${b.pos}"]`), pf = perf[id] || 0;
   let d;
-  if (b.age < pk[0]) d = Math.min(5, (b.pot - b.ovr) * 0.22) + pf * 0.6;
+  const gap = Math.max(0, b.pot - b.ovr);
+  if (b.age < pk[0]) d = Math.min(7, gap * 0.35) + pf * 0.6;
+  else if (b.age < pk[0] + 3) d = Math.min(4, gap * 0.25) + pf * 0.6;
   else if (b.age <= pk[1]) d = pf * 0.6;
   else d = -(1.5 + (b.age - pk[1]) * 1.1) + pf * 0.4;
   const want = Math.max(30, Math.min(99, Math.round(b.ovr + d)));
   checked++; if (p.ovr !== want) bad++;
 }
-ok(`all ${checked} of your players moved exactly by age + performance (no re-normalization)`, checked > 30 && bad === 0);
-const flat = run('(function(){ var p = { pos: "WR", age: 27, ovr: 80, pot: 82, exp: 5 }; progress(p, 0); return p.ovr; })()');
+ok(`all ${checked} of your players moved exactly by age + performance`, checked > 30 && bad === 0);
+const flat = run('(function(){ var p = { pos: "WR", age: 28, ovr: 80, pot: 82, exp: 6 }; progress(p, 0); return p.ovr; })()');
 ok('prime-age player with average performance stays put', flat === 80);
 const old = run('(function(){ var p = { pos: "RB", age: 30, ovr: 85, pot: 85, exp: 8 }; progress(p, 0); return p.ovr; })()');
 ok('30-year-old RB declines with age', old < 85);

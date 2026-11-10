@@ -24,9 +24,13 @@ function newGame(data, userAbbr) {
     S.players.push(p);
   });
   for (var y = S.year; y < S.year + 3; y++) addPicks(y);
-  // starting rating distribution per position, used to keep the league's talent level stable over time
-  S.dist = {};
-  POSITIONS.forEach(function (pos) { S.dist[pos] = S.players.filter(function (p) { return p.pos === pos; }).map(function (p) { return p.ovr; }).sort(function (a, b) { return b - a; }); });
+  // starting number of 80+ players per position: draft class strength steers back toward it
+  S.target80 = {}; S.classBoost = {};
+  S.targetPipe = {};
+  POSITIONS.forEach(function (pos) {
+    S.target80[pos] = S.players.filter(function (p) { return p.pos === pos && p.ovr >= 80; }).length;
+    S.targetPipe[pos] = S.players.filter(function (p) { return p.pos === pos && Market.projOvr(p, 2) >= 80; }).length;
+  });
   // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
   S.payScale = Market.calibrate(S.players, capOf(S.year), S.year, 0.88);
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });

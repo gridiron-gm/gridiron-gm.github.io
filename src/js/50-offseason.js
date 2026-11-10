@@ -80,8 +80,9 @@ function genDraftClass(year) {
     var z = RNG.normal();
     var g = clamp(z, -2.5, 3.2);
     var age = RNG.int(21, 23);
-    var ovr = clamp(Math.round(54 + g * 7 + RNG.normal() * 2), 40, 84);
-    var pot = clamp(Math.round(ovr + 8 + RNG.next() * 14 + Math.max(0, g) * 3), ovr, 99);
+    var boost = (S.classBoost || {})[pos] || 0;               // class strength at this position
+    var ovr = clamp(Math.round(54 + g * 7 + boost * 0.4 + RNG.normal() * 2), 40, 86);
+    var pot = clamp(Math.round(ovr + 8 + RNG.next() * 14 + Math.max(0, g) * 3 + boost * 0.8), ovr, 99);
     var p = { id: 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
               exp: 0, draft: [year, 0, 0], apy: 0, signed: year, gtdTotal: 0, years: [], options: [], status: 'Prospect',
               ovr: ovr, pot: pot, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
@@ -190,11 +191,13 @@ function performanceDeltas() {
 function progress(p, perf) {
   var pk = Market.PEAK[p.pos] || [25, 30];
   var d;
-  if (p.age < pk[0]) d = Math.min(5, (p.pot - p.ovr) * 0.22) + perf * 0.6;
+  var gap = Math.max(0, p.pot - p.ovr);
+  if (p.age < pk[0]) d = Math.min(7, gap * 0.35) + perf * 0.6;                 // developing
+  else if (p.age < pk[0] + 3) d = Math.min(4, gap * 0.25) + perf * 0.6;       // early prime: still growing
   else if (p.age <= pk[1]) d = perf * 0.6;
   else d = -(1.5 + (p.age - pk[1]) * 1.1) + perf * 0.4;
   p.ovr = clamp(Math.round(p.ovr + d), 30, 99);
-  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] ? perf * 0.4 : -2)));
+  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] + 3 ? perf * 0.4 : -2)));
   p.age++; p.exp++;
 }
 
@@ -269,7 +272,7 @@ function endOfYear() {
     progress(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;
   });
-  normalizeRatings();
+  updateClassStrength();
   if (retired.length) news(retired.length + ' players retired, including ' + retired.sort(byKey(function (p) { return p.ovr; }, true)).slice(0, 4).map(function (p) { return p.name; }).join(', ') + '.');
   // keep the save small: unsigned veterans who sat out a year retire; drop retired non-notables
   S.players.forEach(function (p) {
@@ -310,19 +313,18 @@ function clearMarket() {
   Market.setScale(S.payScale);
 }
 
-// Map each position's ratings back onto the starting distribution (rank order preserved).
-function normalizeRatings() {
+// League talent stays stable through the draft, not by editing existing players: every player's
+// rating moves only for aging and performance. Each offseason, positions with fewer 80+ players
+// than at the start get a stronger incoming class (and vice versa).
+function talentCount(pos) { return S.players.filter(function (p) { return p.pos === pos && !p.retired && !p.prospect && p.ovr >= 80; }).length; }
+// forward-looking: players projected to be 80+ two seasons out (counts the young pipeline, reduces lag)
+function pipelineCount(pos) { return S.players.filter(function (p) { return p.pos === pos && !p.retired && !p.prospect && Market.projOvr(p, 2) >= 80; }).length; }
+function updateClassStrength() {
+  S.classBoost = S.classBoost || {};
   POSITIONS.forEach(function (pos) {
-    var ref = S.dist[pos]; if (!ref || !ref.length) return;
-    var list = S.players.filter(function (p) { return p.pos === pos && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr + p.pot * 0.001; }, true));
-    list.forEach(function (p, i) {
-      if (p.team === S.user && !S.autopilot) return;   // your players move only for aging and performance
-      // top-anchored: the i-th best player gets the i-th best starting rating, so the number of
-      // good players per position stays constant even as the pool of fringe players changes size
-      var target = i < ref.length ? ref[i] : ref[ref.length - 1] - Math.min(8, (i - ref.length) * 0.05);
-      var d = target - p.ovr;
-      p.ovr = clamp(target, 30, 99); p.pot = clamp(Math.max(p.ovr, p.pot + d), 30, 99);
-    });
+    var target = S.targetPipe[pos] || 0, cur = pipelineCount(pos);
+    var gap = (target - cur) / Math.max(4, target);            // share of the starting 80+ group missing
+    S.classBoost[pos] = clamp(2 + gap * 15, -8, 20);   // small baseline lift + proportional to the projected shortfall
   });
 }
 function seasonMvp() {
