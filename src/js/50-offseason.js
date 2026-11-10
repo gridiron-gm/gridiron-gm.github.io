@@ -4,6 +4,8 @@ function canAdvance() {
   if (S.phase === 'preseason' && roster(S.user).length > ROSTER_MAX) return 'Cut your roster to ' + ROSTER_MAX + ' first (you have ' + roster(S.user).length + '), or use auto cut.';
   if (S.phase === 'preseason' && roster(S.user).length < 46) return 'You need at least 46 players to start the season (you have ' + roster(S.user).length + '). Sign free agents.';
   if (S.phase === 'draft' && S.draft && S.draft.i < S.draft.order.length) return 'Finish the draft first.';
+  if (S.phase === 'draft' && !S.autopilot && pendingOptions(S.user).length) return 'Decide on the fifth-year option for ' + pendingOptions(S.user).map(function (p) { return p.name; }).join(', ') + ' (deadline: early May).';
+  if (S.phase === 'preseason' && fullSpace(S.user) < 0) return 'From week 1 every contract counts, not just the top 51: you\'d be ' + fmtM(-fullSpace(S.user)) + ' over the cap.';
   if (S.phase === 'fa' && space(S.user) < 0) return 'You are over the cap. Clear space before moving on.';
   return null;
 }
@@ -22,6 +24,7 @@ function advance() {
       startDraft(); S.phase = 'draft';
       break;
     case 'draft':
+      aiFifthYearDecisions();
       finishDraft(); S.phase = 'preseason';
       aiFillRoster(ROSTER_MAX);
       aiTeams().forEach(function (a) { cutdown(a); autoDepth(a); });
@@ -31,12 +34,15 @@ function advance() {
       aiFreeAgencyDay(); aiExtensions();
       aiFillRoster(ROSTER_MAX);
       aiTeams().forEach(function (a) { cutdown(a); });
+      S.phase = 'season';                      // top-51 rule ends: every contract counts now
+      aiTeams().forEach(function (a) { aiCapFix(a, 500); });
       aiPrepay(15000);
       S.week1Space = sumBy(aiTeams().filter(function (a) { return a !== S.user; }), function (a) { return space(a); }) / 31;
-      resetSeason(); S.phase = 'season';
+      resetSeason();
       break;
     case 'season':
       if (S.week < WEEKS) { simWeek(); aiInSeason(); break; }
+      selectProBowls();
       startPlayoffs(); S.phase = 'playoffs';
       news('Playoff field set. AFC: ' + S.playoffs.AFC.join(', ') + '. NFC: ' + S.playoffs.NFC.join(', ') + '.');
       break;
@@ -90,7 +96,9 @@ function prospectGrade(p) { return (p.ovr * 0.55 + p.pot * 0.45) * (0.9 + Market
 
 function draftOrderTeams() {
   if (S.lastOrder) return S.lastOrder.slice();
-  // first draft of the franchise: 2026 season not finished in the data, so use projected team strength
+  // first draft of the franchise: real order from last season's results (nflverse games), final once
+  // the Super Bowl is in the data, provisional (current standings) before that
+  if (BASE.draftOrder && BASE.draftOrder.length === 32) return BASE.draftOrder.slice();
   return TEAMS.map(function (t) { return t.abbr; }).sort(byKey(function (a) { return teamRating(a).ovr + RNG.next() * 2; }));
 }
 function startDraft() {
@@ -148,15 +156,61 @@ function finishDraft() {
 }
 
 // ---------- end of year ----------
-function progress(p) {
+// Progression = age curve + how he actually played this season. No random drift: a rating moves only
+// because of aging (growth toward potential when young, decline past the position's peak) and
+// performance (production vs what his rating predicted, among players with 6+ starts).
+function perfScore(p) {
+  var s = p.s || {}, g = s.g || 0;
+  if (g < 6) return null;
+  switch (p.pos) {
+    case 'QB': return ((s.pyd || 0) + 20 * (s.ptd || 0) - 45 * (s.int || 0)) / g;
+    case 'RB': return ((s.ruyd || 0) + (s.ryd || 0) + 6 * ((s.rutd || 0) + (s.rtd || 0))) / g;
+    case 'WR': case 'TE': return ((s.ryd || 0) + 6 * (s.rtd || 0)) / g;
+    case 'EDGE': case 'DL': return (s.sk || 0) / g;
+    case 'LB': return (s.tk || 0) / g;
+    case 'CB': case 'S': return ((s.dint || 0) * 3 + (s.tk || 0) * 0.2) / g;
+    case 'K': return s.fga ? (s.fgm || 0) / s.fga : null;
+    default: return null;   // OL, P, LS: no stat that separates them in this sim
+  }
+}
+function performanceDeltas() {
+  var out = {};
+  POSITIONS.forEach(function (pos) {
+    var list = S.players.filter(function (p) { return p.pos === pos && !p.retired && perfScore(p) != null; });
+    if (list.length < 8) return;
+    var n = list.length;
+    var byPerf = list.slice().sort(byKey(perfScore)), byOvr = list.slice().sort(byKey(function (p) { return p.ovr; }));
+    var rp = {}, ro = {};
+    byPerf.forEach(function (p, i) { rp[p.id] = i / (n - 1); });
+    byOvr.forEach(function (p, i) { ro[p.id] = i / (n - 1); });
+    list.forEach(function (p) { out[p.id] = (rp[p.id] - ro[p.id]) * 6; });   // -6..+6
+  });
+  return out;
+}
+function progress(p, perf) {
   var pk = Market.PEAK[p.pos] || [25, 30];
   var d;
-  if (p.age < pk[0]) d = Math.min(5, Math.max(-1, (p.pot - p.ovr) * (0.12 + RNG.next() * 0.2) + RNG.normal() * 1.5));
-  else if (p.age <= pk[1]) d = RNG.normal() * 2.2 + 0.3;
-  else d = -(1.5 + (p.age - pk[1]) * 1.1) + RNG.normal() * 2;
+  if (p.age < pk[0]) d = Math.min(5, (p.pot - p.ovr) * 0.22) + perf * 0.6;
+  else if (p.age <= pk[1]) d = perf * 0.6;
+  else d = -(1.5 + (p.age - pk[1]) * 1.1) + perf * 0.4;
   p.ovr = clamp(Math.round(p.ovr + d), 30, 99);
-  p.pot = Math.max(p.ovr, Math.round(p.pot - (p.age >= pk[0] ? 2 : RNG.next() * 2)));
+  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] ? perf * 0.4 : -2)));
   p.age++; p.exp++;
+}
+
+// Pro Bowl: best per position in each conference by rating and this season's production.
+var PRO_BOWL_SLOTS = { QB: 3, RB: 3, WR: 4, TE: 2, OT: 3, IOL: 4, EDGE: 3, DL: 3, LB: 3, CB: 4, S: 3, K: 1, P: 1, LS: 1 };
+function selectProBowls() {
+  var perf = performanceDeltas(), picked = [];
+  ['AFC', 'NFC'].forEach(function (conf) {
+    POSITIONS.forEach(function (pos) {
+      S.players.filter(function (p) { return p.team && TEAM[p.team].conf === conf && p.pos === pos && (p.s.g || 0) >= 8; })
+        .sort(byKey(function (p) { return p.ovr + (perf[p.id] || 0) * 1.5; }, true)).slice(0, PRO_BOWL_SLOTS[pos])
+        .forEach(function (p) { p.pb = (p.pb || 0) + 1; (p.pbYears = p.pbYears || []).push(S.year); picked.push(p); });
+    });
+  });
+  var mine = picked.filter(function (p) { return p.team === S.user; });
+  news('Pro Bowl rosters announced' + (mine.length ? ': ' + mine.map(function (p) { return p.name; }).join(', ') + ' from your team.' : '.'));
 }
 function retires(p) {
   var pk = (Market.PEAK[p.pos] || [25, 30])[1];
@@ -180,10 +234,17 @@ function endOfYear() {
     return ea - eb || (pct(S.teams[a].rec) - pct(S.teams[b].rec)) || ((S.teams[a].rec.pf - S.teams[a].rec.pa) - (S.teams[b].rec.pf - S.teams[b].rec.pa));
   });
   S.lastOrder = all;
-  // career stats
-  S.players.forEach(function (p) { Object.keys(p.s || {}).forEach(function (k) { p.car[k] = (p.car[k] || 0) + p.s[k]; }); p.last = p.s; });
+  // career stats; playing time for first-round picks' option tiers (share of games started)
+  S.players.forEach(function (p) {
+    Object.keys(p.s || {}).forEach(function (k) { p.car[k] = (p.car[k] || 0) + p.s[k]; }); p.last = p.s;
+    if (p.draft && p.draft[1] === 1 && p.draft[0] >= Y - 2) { p.pt = p.pt || {}; p.pt[Y] = Math.round(Math.min(1, (p.s.g || 0) / WEEKS) * 1000) / 1000; }
+  });
+  // fifth-year option salary table for next league year, from this year's cap numbers
+  S.optTables = S.optTables || {};
+  S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);
+  var perf = performanceDeltas();
   // market inflation: if teams sat on lots of unused room this year, next year's asking prices rise
-  if (S.week1Space != null) {
+  if (S.week1Space != null && !S.freezePay) {
     var slack = S.week1Space / capOf(Y) - 0.03;
     // look ahead too: money already free next year (expiring deals) beyond a normal ~30% of the cap
     var ai = aiTeams().filter(function (a) { return a !== S.user; });
@@ -205,7 +266,7 @@ function endOfYear() {
       retired.push(p);
       return;
     }
-    progress(p);
+    progress(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;
   });
   normalizeRatings();
@@ -255,6 +316,7 @@ function normalizeRatings() {
     var ref = S.dist[pos]; if (!ref || !ref.length) return;
     var list = S.players.filter(function (p) { return p.pos === pos && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr + p.pot * 0.001; }, true));
     list.forEach(function (p, i) {
+      if (p.team === S.user && !S.autopilot) return;   // your players move only for aging and performance
       // top-anchored: the i-th best player gets the i-th best starting rating, so the number of
       // good players per position stays constant even as the pool of fringe players changes size
       var target = i < ref.length ? ref[i] : ref[ref.length - 1] - Math.min(8, (i - ref.length) * 0.05);

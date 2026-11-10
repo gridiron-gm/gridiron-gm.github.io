@@ -33,7 +33,7 @@ for name in NAMES:
         def grab(kind):
             m = re.search(r'player-' + kind + r'[^>]*>(.*?)</td>', tr, re.S)
             return {c: money(html.unescape(re.sub(r'<[^>]+>', '', v))) for c, v in
-                    re.findall(r'<div class="(cut|june_1_cut|trade|june_1_trade)"[^>]*>(.*?)</div>', m.group(1), re.S)}
+                    re.findall(r'<div class="(cut|june_1_cut|trade|june_1_trade|restructure|extension)"[^>]*>(.*?)</div>', m.group(1), re.S)}
         cap = money(re.sub(r'<[^>]+>', '', re.search(r'<strong>(.*?)</strong>', tr).group(1)))
         out[name] = {'gsis': r['gsis_id'], 'page': r['player_page'], 'cap': cap,
                      'dead': grab('dead-money'), 'savings': grab('cap-savings')}

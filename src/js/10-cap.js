@@ -17,8 +17,9 @@ var Cap = (function () {
   var CAP_GROWTH = 0.07;            // projected growth for years after the data's projection
   var MIN_ROSTER_FOR_SEASON = 53;
 
-  // Approximate league minimum salary in 2027 by accrued seasons; grows ~$45K a year.
-  var MIN_2027 = [930, 1065, 1140, 1215, 1310, 1310, 1310, 1460];
+  // League minimum salary in 2027 by accrued seasons (2020 CBA schedule: 0, 1, 2, 3, 4-6, 7+);
+  // the CBA raises each step $45K a year.
+  var MIN_2027 = [930, 1050, 1120, 1190, 1260, 1260, 1260, 1345];
   function minSalary(exp, year) {
     var i = Math.max(0, Math.min(MIN_2027.length - 1, exp | 0));
     return MIN_2027[i] + 45 * Math.max(0, year - 2027);
@@ -171,18 +172,24 @@ var Cap = (function () {
 
   // Restructure: convert this year's base salary (above the minimum) into a signing bonus prorated over
   // the remaining real contract years (max 5). Saves cap now, pushes it to later years.
+  // Convertible cash = base salary + roster bonus + workout bonus, minus the league minimum (which must
+  // stay as base salary). Same convention as OverTheCap's restructure figures.
   function restructureMax(p, year, exp) {
     var r = row(p, year);
     if (!r || r.void || yearsLeft(p, year) < 2) return 0;
-    return Math.max(0, r.base - minSalary(exp, year));
+    return Math.max(0, r.base + r.roster + (r.wo || 0) - minSalary(exp, year));
   }
   function restructure(p, year, amount, exp) {
     var amt = Math.min(Math.max(0, amount | 0), restructureMax(p, year, exp));
     if (!amt) return { saved: 0 };
-    var real = remaining(p, year).filter(function (x) { return !x.void; });
+    // proration runs over the remaining contract years, void years included (max 5)
+    var real = remaining(p, year);
     var n = Math.min(MAX_PRORATION_YEARS, real.length), per = Math.floor(amt / n), left = amt;
     var r = row(p, year);
-    r.base -= amt;
+    var take = amt;
+    var fromWo = Math.min(r.wo || 0, take); r.wo = (r.wo || 0) - fromWo; r.other -= fromWo; take -= fromWo;
+    var fromRoster = Math.min(r.roster, take); r.roster -= fromRoster; take -= fromRoster;
+    r.base -= take;
     r.gtd = Math.max(0, r.gtd - amt);   // guaranteed salary is now paid as bonus
     for (var i = 0; i < n; i++) { var add = i === n - 1 ? left : per; real[i].pro += add; left -= add; recalc(real[i]); }
     return { saved: amt - per, amount: amt, years: n };
@@ -210,11 +217,57 @@ var Cap = (function () {
     // adjusted cap = league cap + rollover carried into this year
     return (team.capBase && team.capBase[year] != null ? team.capBase[year] : 0) + ((team.rollover || {})[year] || 0);
   }
-  function teamCommitted(players, team, year) {
-    return sum(players.filter(function (p) { return p.team === team.abbr; }), function (p) { return capHit(p, year); });
+  // Top-51 rule: from the start of the league year until the first regular-season game only the 51
+  // largest cap numbers count (dead money always counts in full). Pass top51 = true in the offseason.
+  var TOP_N = 51;
+  function teamCommitted(players, team, year, top51) {
+    var hits = [];
+    for (var i = 0; i < players.length; i++) if (players[i].team === team.abbr) { var h = capHit(players[i], year); if (h) hits.push(h); }
+    if (top51 && hits.length > TOP_N) { hits.sort(function (a, b) { return b - a; }); hits.length = TOP_N; }
+    return sum(hits, function (h) { return h; });
   }
   function teamDead(team, year) { return (team.dead || {})[year] || 0; }
-  function capSpace(players, team, year) { return teamCap(team, year) - teamCommitted(players, team, year) - teamDead(team, year); }
+  function capSpace(players, team, year, top51) { return teamCap(team, year) - teamCommitted(players, team, year, top51) - teamDead(team, year); }
+
+  // ---- Fifth-year option (first-round picks, 2020 CBA) ----
+  // Decided in the offseason before the player's 4th season (before May), for his 5th season.
+  // Amount: 2+ Pro Bowls -> franchise tag; 1 Pro Bowl -> transition tag; playing-time milestone
+  // (75% of snaps in 2 of 3 seasons, 75% average, or 50% in all 3) -> avg of 3rd-20th salaries;
+  // otherwise -> avg of 3rd-25th salaries. Fully guaranteed when exercised.
+  // table[group] = [tag, transition, playingTime, basic] for that league year.
+  function fifthYearEligible(p, year) {
+    return !!(p.team && p.draft && p.draft[1] === 1 && p.draft[0] === year - 3 && p.signed === p.draft[0] &&
+              !p.fifth && yearsLeft(p, year) === 1 && remaining(p, year).length === 1);
+  }
+  function playingTimeMet(pt) {
+    var v = Object.keys(pt || {}).sort().slice(0, 3).map(function (k) { return pt[k]; });
+    if (v.length < 3) return false;
+    var n75 = v.filter(function (x) { return x >= 0.75; }).length, avg = (v[0] + v[1] + v[2]) / 3;
+    return n75 >= 2 || avg >= 0.75 || v.every(function (x) { return x >= 0.5; });
+  }
+  function fifthYearTier(p) {
+    if ((p.pb || 0) >= 2) return 0;
+    if ((p.pb || 0) === 1) return 1;
+    return playingTimeMet(p.pt) ? 2 : 3;
+  }
+  var TIER_LABEL = ['2+ Pro Bowls: franchise tag amount', '1 Pro Bowl: transition tag amount', 'Playing-time milestone: 3rd-20th average', 'Basic: 3rd-25th average'];
+  function fifthYearAmount(p, table, group) { var t = table[group]; return t ? t[fifthYearTier(p)] : 0; }
+  function exerciseFifthYear(p, year, amount) {
+    p.years.push(recalc({ y: year + 1, base: amount, pro: 0, opt: 0, roster: 0, other: 0, gtd: amount }));
+    p.fifth = 'exercised';
+  }
+  // Build the option table for a league year from that year's cap numbers (tag tiers scaled to `scale`).
+  function optionTable(players, year, groupOf, scale) {
+    var by = {};
+    players.forEach(function (p) { var h = capHit(p, year), g = groupOf[p.pos]; if (h > 0 && g && p.team) (by[g] = by[g] || []).push(h); });
+    var out = {};
+    Object.keys(by).forEach(function (g) {
+      var l = by[g].sort(function (a, b) { return b - a; });
+      var avg = function (a) { return a.length ? Math.round(sum(a, function (x) { return x; }) / a.length) : 0; };
+      out[g] = [Math.round(avg(l.slice(0, 5)) * (scale || 1)), Math.round(avg(l.slice(0, 10)) * (scale || 1)), avg(l.slice(2, 20)), avg(l.slice(2, 25))];
+    });
+    return out;
+  }
 
   function leagueCap(baseCap, baseYear, year) { return Math.round(baseCap * Math.pow(1 + CAP_GROWTH, year - baseYear)); }
 
@@ -243,7 +296,7 @@ var Cap = (function () {
     contractValueLeft: contractValueLeft, releaseCost: releaseCost, applyDead: applyDead, tradeCost: tradeCost,
     buildContract: buildContract, buildExtension: buildExtension, apy: apy, teamCap: teamCap,
     teamCommitted: teamCommitted, teamDead: teamDead, capSpace: capSpace, leagueCap: leagueCap, rollover: rollover,
-    rookieDeal: rookieDeal, restructure: restructure, prepay: prepay, restructureMax: restructureMax, exerciseOptions: exerciseOptions, voidAcceleration: voidAcceleration, recalc: recalc, MAX_PRORATION_YEARS: MAX_PRORATION_YEARS, MIN_ROSTER_FOR_SEASON: MIN_ROSTER_FOR_SEASON
+    rookieDeal: rookieDeal, restructure: restructure, fifthYearEligible: fifthYearEligible, fifthYearTier: fifthYearTier, fifthYearAmount: fifthYearAmount, exerciseFifthYear: exerciseFifthYear, optionTable: optionTable, playingTimeMet: playingTimeMet, TIER_LABEL: TIER_LABEL, TOP_N: TOP_N, prepay: prepay, restructureMax: restructureMax, exerciseOptions: exerciseOptions, voidAcceleration: voidAcceleration, recalc: recalc, MAX_PRORATION_YEARS: MAX_PRORATION_YEARS, MIN_ROSTER_FOR_SEASON: MIN_ROSTER_FOR_SEASON
   };
 })();
 if (typeof module !== 'undefined') module.exports = Cap;

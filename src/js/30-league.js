@@ -59,7 +59,49 @@ function T(abbr) {
   for (var y = S.year; y < S.year + 6; y++) if (t.capBase[y] == null) t.capBase[y] = capOf(y);
   return t;
 }
-function space(abbr, year) { return Cap.capSpace(S.players, T(abbr), year || S.year); }
+// Top-51 rule applies from the start of the league year until week 1, and to future-year projections.
+function top51(year) { return (year || S.year) > S.year || S.phase === 'resign' || S.phase === 'fa' || S.phase === 'draft' || S.phase === 'preseason'; }
+function space(abbr, year) { var y = year || S.year; return Cap.capSpace(S.players, T(abbr), y, top51(y)); }
+function fullSpace(abbr, year) { return Cap.capSpace(S.players, T(abbr), year || S.year, false); }
+function committed(abbr, year) { var y = year || S.year; return Cap.teamCommitted(S.players, T(abbr), y, top51(y)); }
+
+// ---------- fifth-year option ----------
+function optTableFor(year) {
+  if (S.optTables && S.optTables[year]) return S.optTables[year];
+  // first league year: prior year's real cap numbers from the data; tag tiers move with the cap
+  var t = BASE.optTable, sc = 1 + 0.07, out = {};   // tag tiers: prior-year numbers grown with the cap
+  Object.keys(t).forEach(function (g) { out[g] = [Math.round(t[g][0] * sc), Math.round(t[g][1] * sc), t[g][2], t[g][3]]; });
+  return out;
+}
+function fifthYearInfo(p) {
+  if (!Cap.fifthYearEligible(p, S.year)) return null;
+  var tier = Cap.fifthYearTier(p), amt = Cap.fifthYearAmount(p, optTableFor(S.year), BASE.optGroup[p.pos]);
+  return { tier: tier, label: Cap.TIER_LABEL[tier], amount: amt, year: S.year + 1, open: S.phase === 'resign' || S.phase === 'fa' || S.phase === 'draft' };
+}
+function decideFifthYear(p, exercise) {
+  var info = fifthYearInfo(p);
+  if (!info || !info.open) return { ok: false, msg: 'The option window is closed.' };
+  if (exercise) {
+    Cap.exerciseFifthYear(p, S.year, info.amount);
+    news(TEAM[p.team].name + ' exercised the ' + info.year + ' fifth-year option on ' + p.pos + ' ' + p.name + ': ' + fmtM(info.amount) + ', fully guaranteed.', p.team);
+  } else {
+    p.fifth = 'declined';
+    news(TEAM[p.team].name + ' declined the fifth-year option on ' + p.pos + ' ' + p.name + '; he can be a free agent after ' + S.year + '.', p.team);
+  }
+  return { ok: true };
+}
+function pendingOptions(abbr) { return roster(abbr).filter(function (p) { var i = fifthYearInfo(p); return i && i.open; }); }
+// AI: pick up the option when the guaranteed amount is no more than he'd be worth next year (with some
+// slack for stars, whom teams lock in).
+function aiFifthYearDecisions() {
+  aiTeams().forEach(function (abbr) {
+    pendingOptions(abbr).forEach(function (p) {
+      var info = fifthYearInfo(p);
+      var worth = Market.valueAt(p.pos, Market.projOvr(p, 1), marketCap() * 1.07, p.exp + 1, S.year + 1);
+      decideFifthYear(p, info.amount <= worth * (p.ovr >= 80 ? 1.9 : p.ovr >= 72 ? 1.5 : 1.15));
+    });
+  });
+}
 function isPostJune() { return S.phase === 'preseason' || S.phase === 'season' || S.phase === 'playoffs'; }
 function rosterMax() { return S.phase === 'season' || S.phase === 'playoffs' ? ROSTER_MAX : ROSTER_MAX_OFF; }
 function picksOf(abbr) { return S.picks.filter(function (k) { return k.owner === abbr; }).sort(byKey(function (k) { return k.year * 100 + k.round; })); }

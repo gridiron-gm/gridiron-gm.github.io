@@ -7,13 +7,17 @@
    "cut": 182771892,
    "june_1_cut": 125603892,
    "trade": 89521892,
-   "june_1_trade": 32353892
+   "june_1_trade": 32353892,
+   "restructure": 0,
+   "extension": 0
   },
   "savings": {
    "cut": -92418000,
    "june_1_cut": -35250000,
    "trade": 832000,
-   "june_1_trade": 58000000
+   "june_1_trade": 58000000,
+   "restructure": 45324000,
+   "extension": 45324000
   }
  },
  "Josh Allen": {
@@ -24,13 +28,17 @@
    "cut": 147741000,
    "june_1_cut": 86448000,
    "trade": 95241000,
-   "june_1_trade": 33948000
+   "june_1_trade": 33948000,
+   "restructure": 0,
+   "extension": 0
   },
   "savings": {
    "cut": -91593000,
    "june_1_cut": -30300000,
    "trade": -39093000,
-   "june_1_trade": 22200000
+   "june_1_trade": 22200000,
+   "restructure": 10524000,
+   "extension": 10524000
   }
  },
  "Milton Williams": {
@@ -41,13 +49,17 @@
    "cut": 12000000,
    "june_1_cut": 6000000,
    "trade": 12000000,
-   "june_1_trade": 6000000
+   "june_1_trade": 6000000,
+   "restructure": 0,
+   "extension": 0
   },
   "savings": {
    "cut": 18000000,
    "june_1_cut": 24000000,
    "trade": 18000000,
-   "june_1_trade": 24000000
+   "june_1_trade": 24000000,
+   "restructure": 10095000,
+   "extension": 16152000
   }
  },
  "Christian Gonzalez": {
@@ -58,13 +70,17 @@
    "cut": 44639000,
    "june_1_cut": 24719000,
    "trade": 26520000,
-   "june_1_trade": 6600000
+   "june_1_trade": 6600000,
+   "restructure": 0,
+   "extension": 0
   },
   "savings": {
    "cut": -19920000,
    "june_1_cut": 0,
    "trade": -1801000,
-   "june_1_trade": 18119000
+   "june_1_trade": 18119000,
+   "restructure": 13543200,
+   "extension": 13543200
   }
  },
  "Romeo Doubs": {
@@ -75,13 +91,17 @@
    "cut": 26400000,
    "june_1_cut": 18600000,
    "trade": 11700000,
-   "june_1_trade": 3900000
+   "june_1_trade": 3900000,
+   "restructure": 0,
+   "extension": 0
   },
   "savings": {
    "cut": -7800000,
    "june_1_cut": 0,
    "trade": 6900000,
-   "june_1_trade": 14700000
+   "june_1_trade": 14700000,
+   "restructure": 8026667,
+   "extension": 9632000
   }
  }
 }

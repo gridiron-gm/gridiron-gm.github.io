@@ -16,7 +16,7 @@ import pyarrow.parquet as pq
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, 'data', 'raw')
 START_YEAR = 2027          # first league year of the franchise
-CAP_2027 = 326_500         # $K, projected (implied by OverTheCap cap_percent figures)
+CAP_2027 = None            # $K, projected: implied by OverTheCap cap_percent figures (computed below)
 REF_DATE = (2027, 3, 11)   # league year start, for ages
 
 NAME_TO_ABBR = {
@@ -49,7 +49,10 @@ def fnum(x):
 
 # ---------- rosters ----------
 roster = {}
-for r in csv.DictReader(open(os.path.join(RAW, 'roster_2026.csv'))):
+ROSTER_FILE = next((f for f in (f'roster_{START_YEAR}.csv', f'roster_{START_YEAR - 1}.csv')
+                    if os.path.exists(os.path.join(RAW, f)) and os.path.getsize(os.path.join(RAW, f)) > 1000))
+print('rosters from', ROSTER_FILE)
+for r in csv.DictReader(open(os.path.join(RAW, ROSTER_FILE))):
     if r['status'] in ('CUT', 'RET', 'TRD', 'TRT'): continue
     roster[r['gsis_id']] = r
 
@@ -119,6 +122,9 @@ def contract_years(c):
                                          sum(op['per'] * op['span'] for op in options if op['y'] == y)),
                'cap': base + pro + o_exer + o_pend + rost + other}
         if void: row['void'] = True
+        else:
+            wo = min(max(other, 0), k(s['workout_bonus']))
+            if wo: row['wo'] = wo          # workout bonus (part of `other`); convertible in a restructure
         out.append(row)
     out.sort(key=lambda s: s['y'])
     run = []
@@ -136,10 +142,10 @@ for yr in (2025, 2026):
     for r in csv.DictReader(open(os.path.join(RAW, f'stats_player_reg_{yr}.csv'))):
         stats[yr][r['player_id']] = r
 
-snaps = {2025: defaultdict(lambda: {'g': 0, 'off': 0.0, 'def': 0.0, 'st': 0.0}),
-         2026: defaultdict(lambda: {'g': 0, 'off': 0.0, 'def': 0.0, 'st': 0.0})}
-team_games = {2025: defaultdict(set), 2026: defaultdict(set)}
-for yr in (2025, 2026):
+SNAP_YEARS = (2024, 2025, 2026)
+snaps = {yr: defaultdict(lambda: {'g': 0, 'off': 0.0, 'def': 0.0, 'st': 0.0}) for yr in SNAP_YEARS}
+team_games = {yr: defaultdict(set) for yr in SNAP_YEARS}
+for yr in SNAP_YEARS:
     for r in csv.DictReader(open(os.path.join(RAW, f'snap_counts_{yr}.csv'))):
         if r['game_type'] != 'REG': continue
         g = pfr_to_gsis.get(r['pfr_player_id'])
@@ -147,7 +153,7 @@ for yr in (2025, 2026):
         if not g: continue
         s = snaps[yr][g]
         s['g'] += 1; s['off'] += fnum(r['offense_pct']); s['def'] += fnum(r['defense_pct']); s['st'] += fnum(r['st_pct'])
-games_in = {yr: max(len(v) for v in team_games[yr].values()) for yr in (2025, 2026)}
+games_in = {yr: max(len(v) for v in team_games[yr].values()) for yr in SNAP_YEARS}
 
 def snap_share(g, yr, side):
     """Average snap share over the whole team season (missed games count as 0)."""
@@ -239,7 +245,7 @@ for g, c in contracts.items():
         'id': g, 'name': c['player'], 'pos': pos, 'opos': pos_src, 'age': age,
         'team': team if (years and team in NAME_TO_ABBR.values()) else None,
         'prevTeam': team if team in NAME_TO_ABBR.values() else None,
-        'exp': int(xw['years_of_experience']) + 1 if xw.get('years_of_experience', '').isdigit() else max(0, age - 22),
+        'exp': int(xw['years_of_experience']) if xw.get('years_of_experience', '').isdigit() else max(0, age - 22),
         'draft': [c['draft_year'] or 0, c['draft_round'] or 0, c['draft_overall'] or 0],
         'apy': k(c['apy']), 'signed': c['year_signed'], 'gtdTotal': k(c['guaranteed']),
         'years': years, 'options': options,
@@ -316,12 +322,79 @@ def statline(g, pos):
     if pos == 'K': return f"{gp} G · {int(fnum(s['fg_made']))}/{int(fnum(s['fg_att']))} FG"
     return f"{gp} G"
 
+# Pro Bowls (Pro Football Reference counts via nflverse draft_picks) and playing time for recent
+# first-round picks: both drive the fifth-year option amount.
+pro_bowls = {}
+for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
+    if r['gsis_id'] and r['probowls'].isdigit(): pro_bowls[r['gsis_id']] = int(r['probowls'])
+OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 for p in players:
     p['line26'] = statline(p['id'], p['pos'])
     del p['_f']; del p['_score']
+    p['pb'] = pro_bowls.get(p['id'], 0)
+    if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
+        side = 'off' if p['pos'] in OFF_POS else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'
+        p['pt'] = {str(yr): round(snap_share(p['id'], yr, side), 3) for yr in SNAP_YEARS if yr >= p['draft'][0]}
+
+# ---------- league cap: implied by OverTheCap's cap_percent on big cap hits ----------
+implied = []
+for c in contracts.values():
+    for s_ in c['season_history'] or []:
+        if s_['year'] == str(START_YEAR) and s_['cap_percent'] and (s_['cap_number'] or 0) > 40:
+            implied.append(s_['cap_number'] / s_['cap_percent'])
+CAP_2027 = int(round(st.median(implied) * 10)) * 100 if implied else 326_500
+print('implied', START_YEAR, 'cap', CAP_2027, 'from', len(implied), 'contracts')
+
+# ---------- fifth-year option salary tables (prior league year's cap numbers by CBA position group) ----------
+OPT_GROUP = {'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'OT': 'OL', 'IOL': 'OL', 'EDGE': 'DE', 'DL': 'DT',
+             'LB': 'LB', 'CB': 'CB', 'S': 'S', 'K': 'KP', 'P': 'KP', 'LS': 'KP'}
+prior = defaultdict(list)
+for c in contracts.values():
+    grp = OPT_GROUP.get(POS_MAP.get(c['position'], ''), None)
+    if not grp: continue
+    for s_ in c['season_history'] or []:
+        if s_['year'] == str(START_YEAR - 1) and (s_['cap_number'] or 0) > 0:
+            prior[grp].append(k(s_['cap_number']))
+def avg(lst): return int(round(sum(lst) / len(lst))) if lst else 0
+opt_table = {}
+for grp, lst in prior.items():
+    lst.sort(reverse=True)
+    # [2+ Pro Bowls ~ franchise tag (top 5), 1 Pro Bowl ~ transition tag (top 10),
+    #  playing-time milestone (3rd-20th), basic (3rd-25th)]
+    opt_table[grp] = [avg(lst[:5]), avg(lst[:10]), avg(lst[2:20]), avg(lst[2:25])]
+
+# ---------- draft order from real results of the previous season (nflverse games) ----------
+def draft_order(season):
+    games = [g for g in csv.DictReader(open(os.path.join(RAW, 'games.csv'))) if g['season'] == str(season) and g['home_score'] != '']
+    rec = defaultdict(lambda: [0, 0, 0]); opps = defaultdict(list)
+    for g in games:
+        if g['game_type'] != 'REG': continue
+        h, a, hs, as_ = g['home_team'], g['away_team'], int(g['home_score']), int(g['away_score'])
+        opps[h].append(a); opps[a].append(h)
+        if hs > as_: rec[h][0] += 1; rec[a][1] += 1
+        elif as_ > hs: rec[a][0] += 1; rec[h][1] += 1
+        else: rec[h][2] += 1; rec[a][2] += 1
+    def wp(t): r = rec[t]; n = sum(r); return (r[0] + r[2] / 2) / n if n else 0
+    def sos(t): return sum(wp(o) for o in opps[t]) / len(opps[t]) if opps[t] else 0
+    stage = {}   # playoff exit round: 1 WC, 2 DIV, 3 CON, 4 SB loser, 5 champion
+    for g in games:
+        rnd = {'WC': 1, 'DIV': 2, 'CON': 3, 'SB': 4}.get(g['game_type'])
+        if not rnd: continue
+        hs, as_ = int(g['home_score']), int(g['away_score'])
+        loser, winner = (g['away_team'], g['home_team']) if hs > as_ else (g['home_team'], g['away_team'])
+        stage[loser] = rnd
+        if rnd == 4: stage[winner] = 5
+    teams = sorted(NAME_TO_ABBR.values())
+    order = sorted(teams, key=lambda t: (stage.get(t, 0), wp(t), sos(t)))
+    reg = sum(1 for g in games if g['game_type'] == 'REG')
+    final = reg >= 272 and any(v == 5 for v in stage.values())
+    return order, final, reg
+d_order, d_final, d_games = draft_order(START_YEAR - 1)
+print('draft order', 'final' if d_final else f'provisional ({d_games} of 272 games played)', d_order[:5], '...')
 
 players.sort(key=lambda p: (p['team'] or 'ZZZ', -p['ovr']))
-out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'capProjected': True,
+out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'capProjected': True, 'optTable': opt_table, 'optGroup': OPT_GROUP,
+                'draftOrder': d_order, 'draftOrderFinal': d_final, 'draftOrderGames': d_games, 'rosterFile': ROSTER_FILE,
                 'source': 'nflverse (contracts: OverTheCap), built ' + __import__('datetime').date.today().isoformat()},
        'players': players}
 json.dump(out, open(os.path.join(ROOT, 'src', 'data.json'), 'w'), separators=(',', ':'))

@@ -9,7 +9,7 @@ const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data.json')
 const seasons = +process.argv[2] || 3;
 let fail = 0;
 const check = (l, c) => { if (!c) { fail++; console.log('  FAIL', l); } };
-vm.runInContext("newGame(DATA, \"NE\"); reindex(); S.autopilot = true;", Object.assign(ctx, { DATA: data }));
+vm.runInContext("newGame(DATA, \"NE\"); reindex(); S.autopilot = true; S.freezePay = FREEZE;", Object.assign(ctx, { DATA: data, FREEZE: process.argv[3] === "freeze" }));
 const t0 = Date.now();
 for (let s = 0; s < seasons; s++) {
   const out = vm.runInContext(`(function(){

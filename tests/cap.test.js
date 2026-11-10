@@ -42,6 +42,17 @@ for (const [name, ref] of Object.entries(otc)) {
   const left28 = Cap.remaining(p, Y).slice(1).reduce((s, r) => s + r.pro, 0);
   eq(`${name} post-June 1 cut 2028 dead`, cutPost.dead[Y + 1] || 0, left28);
 }
+// restructures: OverTheCap's "restructure" column = cap saved this year by converting all but the
+// minimum of base + roster + workout bonus into a bonus prorated over the remaining years (max 5)
+for (const [name, ref] of Object.entries(otc)) {
+  const p = JSON.parse(JSON.stringify(byId[ref.gsis]));
+  const want = Math.round(ref.savings.restructure / 1000);
+  const r = Cap.restructure(p, Y, Cap.restructureMax(p, Y, p.exp), p.exp);
+  // Gonzalez: OverTheCap uses the 3-accrued-season minimum ($1.19M), nflverse experience gives 4 ($1.26M)
+  eq(`${name} restructure savings`, r.saved, want, name === 'Christian Gonzalez' ? 60 : 2);
+  rows.push({ name, kind: 'Restructure (max)', ours: M(0), otc: M(Math.round(ref.dead.restructure / 1000)), ourSav: M(r.saved), otcSav: M(want),
+              match: Math.abs(r.saved - want) <= 2, note: Math.abs(r.saved - want) > 2 ? 'minimum-salary tier: OTC counts 3 accrued seasons, nflverse 4' : undefined });
+}
 console.table(rows);
 fs.writeFileSync(path.join(__dirname, 'otc_comparison.json'), JSON.stringify(rows, null, 1));
 
@@ -143,6 +154,50 @@ console.log('Restructure (Milton Williams)');
   ok('base never below minimum', Cap.row(w, Y).base >= Cap.minSalary(w.exp, Y));
   ok('dead money rises after restructure', Cap.releaseCost(w, Y, false).dead[Y] > 12000);
   console.log('  restructured', M(max), 'over', n, 'yrs: saves', M(r.saved), 'in 2027');
+}
+
+// ---------- 4c. Top-51 rule ----------
+console.log('Top-51 rule');
+{
+  const team = { abbr: 'TST', capBase: { 2027: 300000 }, dead: { 2027: 5000 }, rollover: {} };
+  const ps = [];
+  for (let i = 0; i < 60; i++) ps.push({ team: 'TST', years: [{ y: 2027, base: 1000 + i * 100, pro: 0, opt: 0, roster: 0, other: 0, gtd: 0, cap: 1000 + i * 100 }] });
+  const all = ps.reduce((s, p) => s + p.years[0].cap, 0);
+  const top = ps.map(p => p.years[0].cap).sort((a, b) => b - a).slice(0, 51).reduce((s, x) => s + x, 0);
+  eq('in season: all 60 contracts count', Cap.teamCommitted(ps, team, 2027, false), all);
+  eq('offseason: only the 51 largest count', Cap.teamCommitted(ps, team, 2027, true), top);
+  eq('offseason space = cap - top 51 - all dead money', Cap.capSpace(ps, team, 2027, true), 300000 - top - 5000);
+  ok('with 51 or fewer players both counts agree', Cap.teamCommitted(ps.slice(0, 40), team, 2027, true) === Cap.teamCommitted(ps.slice(0, 40), team, 2027, false));
+  const players = data.players;
+  const ne = { abbr: 'NE', capBase: { 2027: data.meta.cap }, dead: {}, rollover: {} };
+  const nRos = players.filter(p => p.team === 'NE').length;
+  ok('NE (' + nRos + ' under contract) unaffected until it carries more than 51', nRos > 51 || Cap.teamCommitted(players, ne, Y, true) === Cap.teamCommitted(players, ne, Y, false));
+}
+
+// ---------- 4d. Fifth-year option ----------
+console.log('Fifth-year option (Drake Maye, 2024 #3)');
+{
+  const maye = JSON.parse(JSON.stringify(data.players.find(p => p.name === 'Drake Maye')));
+  const table = data.meta.optTable;
+  ok('eligible in 2027 offseason', Cap.fifthYearEligible(maye, Y));
+  ok('not eligible a year early', !Cap.fifthYearEligible(maye, Y - 1));
+  ok('2 Pro Bowls -> franchise tag tier', Cap.fifthYearTier(maye) === 0);
+  ok('playing time: 62%/96%/96% meets the 75%-in-2-of-3 milestone', Cap.playingTimeMet(maye.pt));
+  ok('playing time: 70/80/40 fails', !Cap.playingTimeMet({ 2024: 0.7, 2025: 0.8, 2026: 0.4 }));
+  ok('playing time: 55/60/90 meets the 50%-every-season rule', Cap.playingTimeMet({ 2024: 0.55, 2025: 0.6, 2026: 0.9 }));
+  ok('tier order: 1 Pro Bowl', Cap.fifthYearTier({ pb: 1, pt: {} }) === 1);
+  ok('tier order: milestone only', Cap.fifthYearTier({ pb: 0, pt: { 2024: 0.8, 2025: 0.8, 2026: 0.1 } }) === 2);
+  ok('tier order: basic', Cap.fifthYearTier({ pb: 0, pt: { 2024: 0.3, 2025: 0.3, 2026: 0.3 } }) === 3);
+  const amt = Cap.fifthYearAmount(maye, table, 'QB');
+  eq('Maye amount = QB tag tier', amt, table.QB[0]);
+  ok('tiers ordered tag >= transition >= milestone >= basic', Object.values(table).every(t => t[0] >= t[1] && t[1] >= t[2] && t[2] >= t[3]));
+  Cap.exerciseFifthYear(maye, Y, amt);
+  const r28 = Cap.row(maye, Y + 1);
+  ok('option adds 2028 year', !!r28 && Cap.yearsLeft(maye, Y) === 2);
+  eq('option fully guaranteed', r28.gtd, amt);
+  eq('cut pre-June 1 in 2027 now owes the option', Cap.releaseCost(maye, Y, false).dead[Y], maye.years[0].pro + maye.years[0].gtd + amt);
+  ok('cannot exercise twice', !Cap.fifthYearEligible(maye, Y));
+  console.log('  Maye 2028 option: ' + M(amt) + ' (' + Cap.TIER_LABEL[Cap.fifthYearTier(maye)] + ')');
 }
 
 // ---------- 5. Rookie scale ----------

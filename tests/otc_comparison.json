@@ -178,5 +178,51 @@
   "ourSav": "$14.70M",
   "otcSav": "$14.70M",
   "match": true
+ },
+ {
+  "name": "Patrick Mahomes",
+  "kind": "Restructure (max)",
+  "ours": "$0.00M",
+  "otc": "$0.00M",
+  "ourSav": "$45.32M",
+  "otcSav": "$45.32M",
+  "match": true
+ },
+ {
+  "name": "Josh Allen",
+  "kind": "Restructure (max)",
+  "ours": "$0.00M",
+  "otc": "$0.00M",
+  "ourSav": "$10.52M",
+  "otcSav": "$10.52M",
+  "match": true
+ },
+ {
+  "name": "Milton Williams",
+  "kind": "Restructure (max)",
+  "ours": "$0.00M",
+  "otc": "$0.00M",
+  "ourSav": "$10.10M",
+  "otcSav": "$10.10M",
+  "match": true
+ },
+ {
+  "name": "Christian Gonzalez",
+  "kind": "Restructure (max)",
+  "ours": "$0.00M",
+  "otc": "$0.00M",
+  "ourSav": "$13.49M",
+  "otcSav": "$13.54M",
+  "match": false,
+  "note": "minimum-salary tier: OTC counts 3 accrued seasons, nflverse 4"
+ },
+ {
+  "name": "Romeo Doubs",
+  "kind": "Restructure (max)",
+  "ours": "$0.00M",
+  "otc": "$0.00M",
+  "ourSav": "$8.03M",
+  "otcSav": "$8.03M",
+  "match": true
  }
 ]
