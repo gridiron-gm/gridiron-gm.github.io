@@ -1,0 +1,87 @@
+{
+ "Patrick Mahomes": {
+  "gsis": "00-0033873",
+  "page": "https://overthecap.com/player/patrick-mahomes/5594/",
+  "cap": 5,
+  "dead": {
+   "cut": 182771892,
+   "june_1_cut": 125603892,
+   "trade": 89521892,
+   "june_1_trade": 32353892
+  },
+  "savings": {
+   "cut": -92418000,
+   "june_1_cut": -35250000,
+   "trade": 832000,
+   "june_1_trade": 58000000
+  }
+ },
+ "Josh Allen": {
+  "gsis": "00-0034857",
+  "page": "https://overthecap.com/player/josh-allen/6892/",
+  "cap": 17,
+  "dead": {
+   "cut": 147741000,
+   "june_1_cut": 86448000,
+   "trade": 95241000,
+   "june_1_trade": 33948000
+  },
+  "savings": {
+   "cut": -91593000,
+   "june_1_cut": -30300000,
+   "trade": -39093000,
+   "june_1_trade": 22200000
+  }
+ },
+ "Milton Williams": {
+  "gsis": "00-0036916",
+  "page": "https://overthecap.com/player/milton-williams/9537/",
+  "cap": 15,
+  "dead": {
+   "cut": 12000000,
+   "june_1_cut": 6000000,
+   "trade": 12000000,
+   "june_1_trade": 6000000
+  },
+  "savings": {
+   "cut": 18000000,
+   "june_1_cut": 24000000,
+   "trade": 18000000,
+   "june_1_trade": 24000000
+  }
+ },
+ "Christian Gonzalez": {
+  "gsis": "00-0039147",
+  "page": "https://overthecap.com/player/christian-gonzalez/10841/",
+  "cap": 16,
+  "dead": {
+   "cut": 44639000,
+   "june_1_cut": 24719000,
+   "trade": 26520000,
+   "june_1_trade": 6600000
+  },
+  "savings": {
+   "cut": -19920000,
+   "june_1_cut": 0,
+   "trade": -1801000,
+   "june_1_trade": 18119000
+  }
+ },
+ "Romeo Doubs": {
+  "gsis": "00-0037816",
+  "page": "https://overthecap.com/player/romeo-doubs/10177/",
+  "cap": 18600000,
+  "dead": {
+   "cut": 26400000,
+   "june_1_cut": 18600000,
+   "trade": 11700000,
+   "june_1_trade": 3900000
+  },
+  "savings": {
+   "cut": -7800000,
+   "june_1_cut": 0,
+   "trade": 6900000,
+   "june_1_trade": 14700000
+  }
+ }
+}

@@ -1,0 +1,182 @@
+[
+ {
+  "name": "Patrick Mahomes",
+  "kind": "Cut pre-June 1",
+  "ours": "$182.77M",
+  "otc": "$182.77M",
+  "ourSav": "$-92.42M",
+  "otcSav": "$-92.42M",
+  "match": true
+ },
+ {
+  "name": "Patrick Mahomes",
+  "kind": "Cut post-June 1",
+  "ours": "$125.60M",
+  "otc": "$125.60M",
+  "ourSav": "$-35.25M",
+  "otcSav": "$-35.25M",
+  "match": true
+ },
+ {
+  "name": "Patrick Mahomes",
+  "kind": "Trade pre-June 1",
+  "ours": "$89.52M",
+  "otc": "$89.52M",
+  "ourSav": "$0.83M",
+  "otcSav": "$0.83M",
+  "match": true
+ },
+ {
+  "name": "Patrick Mahomes",
+  "kind": "Trade post-June 1",
+  "ours": "$32.35M",
+  "otc": "$32.35M",
+  "ourSav": "$58.00M",
+  "otcSav": "$58.00M",
+  "match": true
+ },
+ {
+  "name": "Josh Allen",
+  "kind": "Cut pre-June 1",
+  "ours": "$147.74M",
+  "otc": "$147.74M",
+  "ourSav": "$-91.59M",
+  "otcSav": "$-91.59M",
+  "match": true
+ },
+ {
+  "name": "Josh Allen",
+  "kind": "Cut post-June 1",
+  "ours": "$86.45M",
+  "otc": "$86.45M",
+  "ourSav": "$-30.30M",
+  "otcSav": "$-30.30M",
+  "match": true
+ },
+ {
+  "name": "Josh Allen",
+  "kind": "Trade pre-June 1",
+  "ours": "$95.24M",
+  "otc": "$95.24M",
+  "ourSav": "$-39.09M",
+  "otcSav": "$-39.09M",
+  "match": true
+ },
+ {
+  "name": "Josh Allen",
+  "kind": "Trade post-June 1",
+  "ours": "$33.95M",
+  "otc": "$33.95M",
+  "ourSav": "$22.20M",
+  "otcSav": "$22.20M",
+  "match": true
+ },
+ {
+  "name": "Milton Williams",
+  "kind": "Cut pre-June 1",
+  "ours": "$12.00M",
+  "otc": "$12.00M",
+  "ourSav": "$18.00M",
+  "otcSav": "$18.00M",
+  "match": true
+ },
+ {
+  "name": "Milton Williams",
+  "kind": "Cut post-June 1",
+  "ours": "$6.00M",
+  "otc": "$6.00M",
+  "ourSav": "$24.00M",
+  "otcSav": "$24.00M",
+  "match": true
+ },
+ {
+  "name": "Milton Williams",
+  "kind": "Trade pre-June 1",
+  "ours": "$12.00M",
+  "otc": "$12.00M",
+  "ourSav": "$18.00M",
+  "otcSav": "$18.00M",
+  "match": true
+ },
+ {
+  "name": "Milton Williams",
+  "kind": "Trade post-June 1",
+  "ours": "$6.00M",
+  "otc": "$6.00M",
+  "ourSav": "$24.00M",
+  "otcSav": "$24.00M",
+  "match": true
+ },
+ {
+  "name": "Christian Gonzalez",
+  "kind": "Cut pre-June 1",
+  "ours": "$44.64M",
+  "otc": "$44.64M",
+  "ourSav": "$-19.92M",
+  "otcSav": "$-19.92M",
+  "match": true
+ },
+ {
+  "name": "Christian Gonzalez",
+  "kind": "Cut post-June 1",
+  "ours": "$24.72M",
+  "otc": "$24.72M",
+  "ourSav": "$0.00M",
+  "otcSav": "$0.00M",
+  "match": true
+ },
+ {
+  "name": "Christian Gonzalez",
+  "kind": "Trade pre-June 1",
+  "ours": "$26.52M",
+  "otc": "$26.52M",
+  "ourSav": "$-1.80M",
+  "otcSav": "$-1.80M",
+  "match": true
+ },
+ {
+  "name": "Christian Gonzalez",
+  "kind": "Trade post-June 1",
+  "ours": "$6.60M",
+  "otc": "$6.60M",
+  "ourSav": "$18.12M",
+  "otcSav": "$18.12M",
+  "match": true
+ },
+ {
+  "name": "Romeo Doubs",
+  "kind": "Cut pre-June 1",
+  "ours": "$26.40M",
+  "otc": "$26.40M",
+  "ourSav": "$-7.80M",
+  "otcSav": "$-7.80M",
+  "match": true
+ },
+ {
+  "name": "Romeo Doubs",
+  "kind": "Cut post-June 1",
+  "ours": "$18.60M",
+  "otc": "$18.60M",
+  "ourSav": "$0.00M",
+  "otcSav": "$0.00M",
+  "match": true
+ },
+ {
+  "name": "Romeo Doubs",
+  "kind": "Trade pre-June 1",
+  "ours": "$11.70M",
+  "otc": "$11.70M",
+  "ourSav": "$6.90M",
+  "otcSav": "$6.90M",
+  "match": true
+ },
+ {
+  "name": "Romeo Doubs",
+  "kind": "Trade post-June 1",
+  "ours": "$3.90M",
+  "otc": "$3.90M",
+  "ourSav": "$14.70M",
+  "otcSav": "$14.70M",
+  "match": true
+ }
+]
