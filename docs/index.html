@@ -1,0 +1,1954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFL GM</title>
+<meta name="description" content="NFL franchise GM sim with real rosters and contracts.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --surface2: #efede6; --text: #1d1d1b; --muted: #6b6a64; --border: #dedbd2;
+  --accent: #1f5fae; --accent-bg: #e4eefa; --good: #2f7a1f; --good-bg: #e6f2dc; --warn: #8a5a0b; --warn-bg: #faeeda;
+  --bad: #b23b32; --bad-bg: #fbe7e5; --radius: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1f1f1d; --surface2: #2a2a27; --text: #ecebe6; --muted: #a09f98; --border: #393935;
+    --accent: #7fb2f0; --accent-bg: #1c3150; --good: #8fcf72; --good-bg: #1f3317; --warn: #f0c070; --warn-bg: #3d2c0f;
+    --bad: #f0928a; --bad-bg: #44201d;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; }
+#app { max-width: 1180px; margin: 0 auto; padding: 0 16px 48px; }
+h1 { font-size: 28px; font-weight: 600; margin: 24px 0 4px; }
+h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.muted { color: var(--muted); } .small { font-size: 12px; } .bad { color: var(--bad); } .good { color: var(--good); }
+button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) { button.primary { color: #0b1a2e; } }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); text-align: left; }
+button.mini { padding: 0 6px; font-size: 11px; margin-left: 4px; }
+button.x { border: 0; font-size: 18px; }
+select, input { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; }
+input[type=number] { width: 100%; }
+.chip { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; box-shadow: inset 0 0 0 1px rgba(128,128,128,.45); }
+.top { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; justify-content: space-between; padding: 12px 0 8px; border-bottom: 1px solid var(--border); }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.tname { font-weight: 600; font-size: 16px; }
+.topstats { display: flex; flex-wrap: wrap; gap: 14px; }
+.adv { display: flex; gap: 6px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; margin: 10px 0 14px; }
+.nav button, .filters button, .sortbar button { font-size: 13px; padding: 4px 10px; color: var(--muted); }
+.nav button.on, .filters button.on, .sortbar button.on { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+.filters, .sortbar { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; align-items: center; }
+.msg { padding: 8px 12px; border-radius: var(--radius); background: var(--good-bg); color: var(--good); margin: 0 0 12px; }
+.msg.bad { background: var(--bad-bg); color: var(--bad); }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0 0 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin: 0 0 12px; }
+.metric { background: var(--surface2); border-radius: var(--radius); padding: 10px 12px; }
+.metric p { margin: 0; font-size: 12px; color: var(--muted); } .metric b { font-size: 22px; font-weight: 600; display: block; } .metric span { font-size: 12px; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; min-width: 0; }
+.row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.todo, .news { margin: 0; padding-left: 18px; } .todo li, .news li { margin: 4px 0; }
+.tablewrap { overflow-x: auto; margin: 0 0 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.tablewrap.short { max-height: 420px; overflow-y: auto; border: 0; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; position: sticky; top: 0; background: var(--surface); }
+td.r, th.r { text-align: right; } tr.sel td { background: var(--accent-bg); } tr.total td { font-weight: 600; }
+.ovr { display: inline-block; min-width: 28px; text-align: center; border-radius: 4px; padding: 1px 4px; font-weight: 600; font-size: 12px; }
+.ovr.g { background: var(--good-bg); color: var(--good); } .ovr.n { background: var(--surface2); } .ovr.w { background: var(--warn-bg); color: var(--warn); }
+.pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: var(--radius); }
+.pill.g { background: var(--good-bg); color: var(--good); } .pill.w { background: var(--warn-bg); color: var(--warn); } .pill.b { background: var(--bad-bg); color: var(--bad); }
+.bar { height: 8px; background: var(--surface2); border-radius: 4px; margin: 6px 0; } .bar div { height: 8px; border-radius: 4px; }
+.bar .g { background: var(--good); } .bar .w { background: var(--warn); } .bar .b { background: var(--bad); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 0; }
+.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+.modal { background: var(--surface); border-radius: 14px; padding: 16px 18px; width: 100%; max-width: 860px; }
+.mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin: 0 0 12px; }
+.release { border: 1px solid var(--bad); border-radius: var(--radius); padding: 10px 12px; margin: 10px 0 0; }
+.release .grid2 { margin: 0; } .release button { margin-top: 6px; }
+.offergrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 12px; }
+.offergrid label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.moodrow { margin: 6px 0; }
+.tradehead { margin: 0 0 12px; } .tradehead select { max-width: 100%; margin-left: 6px; }
+.pickrow { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.tag { font-size: 12px; padding: 2px 8px; } .tag.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.depthgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.drow { display: flex; justify-content: space-between; align-items: center; padding: 3px 4px; border-radius: 4px; }
+.drow.start { background: var(--accent-bg); }
+.scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; }
+.score { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; }
+.start { max-width: 860px; margin: 0 auto; padding-top: 20px; }
+.teamgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.teambtn { display: flex; align-items: center; gap: 6px; text-align: left; padding: 10px; }
+.teambtn span { color: var(--muted); font-size: 12px; } .teambtn.pick { border-color: var(--accent); }
+@media (max-width: 640px) { .top { position: static; } .adv { width: 100%; } .adv button.primary { flex: 1; } }
+</style>
+</head>
+<body>
+<div id="app"><div class="start"><h1>NFL GM</h1><p class="muted">Loading rosters and contracts…</p></div></div>
+<script>
+// Helpers, team definitions, seeded RNG.
+var TEAMS = [
+  ['ARI', 'Arizona Cardinals', 'NFC', 'West', '#97233F'], ['ATL', 'Atlanta Falcons', 'NFC', 'South', '#A71930'],
+  ['BAL', 'Baltimore Ravens', 'AFC', 'North', '#241773'], ['BUF', 'Buffalo Bills', 'AFC', 'East', '#00338D'],
+  ['CAR', 'Carolina Panthers', 'NFC', 'South', '#0085CA'], ['CHI', 'Chicago Bears', 'NFC', 'North', '#0B162A'],
+  ['CIN', 'Cincinnati Bengals', 'AFC', 'North', '#FB4F14'], ['CLE', 'Cleveland Browns', 'AFC', 'North', '#FF3C00'],
+  ['DAL', 'Dallas Cowboys', 'NFC', 'East', '#003594'], ['DEN', 'Denver Broncos', 'AFC', 'West', '#FB4F14'],
+  ['DET', 'Detroit Lions', 'NFC', 'North', '#0076B6'], ['GB', 'Green Bay Packers', 'NFC', 'North', '#203731'],
+  ['HOU', 'Houston Texans', 'AFC', 'South', '#03202F'], ['IND', 'Indianapolis Colts', 'AFC', 'South', '#002C5F'],
+  ['JAX', 'Jacksonville Jaguars', 'AFC', 'South', '#006778'], ['KC', 'Kansas City Chiefs', 'AFC', 'West', '#E31837'],
+  ['LV', 'Las Vegas Raiders', 'AFC', 'West', '#A5ACAF'], ['LAC', 'Los Angeles Chargers', 'AFC', 'West', '#0080C6'],
+  ['LA', 'Los Angeles Rams', 'NFC', 'West', '#003594'], ['MIA', 'Miami Dolphins', 'AFC', 'East', '#008E97'],
+  ['MIN', 'Minnesota Vikings', 'NFC', 'North', '#4F2683'], ['NE', 'New England Patriots', 'AFC', 'East', '#002244'],
+  ['NO', 'New Orleans Saints', 'NFC', 'South', '#D3BC8D'], ['NYG', 'New York Giants', 'NFC', 'East', '#0B2265'],
+  ['NYJ', 'New York Jets', 'AFC', 'East', '#125740'], ['PHI', 'Philadelphia Eagles', 'NFC', 'East', '#004C54'],
+  ['PIT', 'Pittsburgh Steelers', 'AFC', 'North', '#FFB612'], ['SF', 'San Francisco 49ers', 'NFC', 'West', '#AA0000'],
+  ['SEA', 'Seattle Seahawks', 'NFC', 'West', '#69BE28'], ['TB', 'Tampa Bay Buccaneers', 'NFC', 'South', '#D50A0A'],
+  ['TEN', 'Tennessee Titans', 'AFC', 'South', '#4B92DB'], ['WAS', 'Washington Commanders', 'NFC', 'East', '#5A1414'],
+].map(function (t) { return { abbr: t[0], name: t[1], conf: t[2], div: t[3], color: t[4] }; });
+var TEAM = {}; TEAMS.forEach(function (t) { TEAM[t.abbr] = t; });
+
+var POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL', 'EDGE', 'DL', 'LB', 'CB', 'S', 'K', 'P', 'LS'];
+var POS_LABEL = { OT: 'OT', IOL: 'IOL', EDGE: 'EDGE', DL: 'DL' };
+
+// Seeded RNG (mulberry32); state lives in the save so sims are reproducible.
+var RNG = {
+  s: 1,
+  next: function () {
+    var t = (RNG.s = (RNG.s + 0x6D2B79F5) | 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  },
+  int: function (a, b) { return a + Math.floor(RNG.next() * (b - a + 1)); },
+  pick: function (arr) { return arr[Math.floor(RNG.next() * arr.length)]; },
+  normal: function () { var u = 1 - RNG.next(), v = RNG.next(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); },
+  shuffle: function (a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(RNG.next() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; },
+};
+
+function fmtM(k, dp) {
+  if (k == null) return '–';
+  if (Math.round(k) === 0) return '$0';
+  var neg = k < 0; k = Math.abs(k);
+  var s = k >= 1000 ? '$' + (k / 1000).toFixed(dp == null ? 1 : dp) + 'M' : '$' + Math.round(k) + 'K';
+  return neg ? '−' + s : s;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function sumBy(arr, f) { var s = 0; for (var i = 0; i < arr.length; i++) s += f(arr[i]); return s; }
+function byKey(f, desc) { return function (a, b) { var x = f(a), y = f(b); return desc ? (y > x ? 1 : y < x ? -1 : 0) : (x > y ? 1 : x < y ? -1 : 0); }; }
+function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+function chip(abbr) { var t = TEAM[abbr]; return t ? '<span class="chip" style="background:' + t.color + '"></span>' : ''; }
+
+// Cap and contract rules. Pure functions, no DOM. Money is integer $ thousands ($K).
+//
+// A contract is player.years = [{y, base, pro, opt, roster, other, gtd, cap, void?}, ...] with consecutive y.
+//   base    base salary            pro    prorated bonus charged this year (signing + exercised options)
+//   opt     proration of option bonuses not yet exercised (counts on the cap, not dead money until exercised)
+//   roster  roster bonus           other  workout/per-game/other bonuses
+//   gtd     guaranteed cash still owed for that year (base/roster/other, plus a guaranteed option bonus)
+//   cap     cap number = base + pro + opt + roster + other
+//   void    void year: no salary, carries leftover proration that accelerates when the deal voids
+// player.options = [{y, per, span}] pending option bonuses: exercised at the start of league year y.
+// Team dead money lives in team.dead = {year: $K}.
+// Team dead money lives in team.dead = {year: $K}.
+var Cap = (function () {
+  'use strict';
+
+  var MAX_PRORATION_YEARS = 5;
+  var CAP_GROWTH = 0.07;            // projected growth for years after the data's projection
+  var MIN_ROSTER_FOR_SEASON = 53;
+
+  // Approximate league minimum salary in 2027 by accrued seasons; grows ~$45K a year.
+  var MIN_2027 = [930, 1065, 1140, 1215, 1310, 1310, 1310, 1460];
+  function minSalary(exp, year) {
+    var i = Math.max(0, Math.min(MIN_2027.length - 1, exp | 0));
+    return MIN_2027[i] + 45 * Math.max(0, year - 2027);
+  }
+
+  function row(p, year) {
+    if (!p.years) return null;
+    for (var i = 0; i < p.years.length; i++) if (p.years[i].y === year) return p.years[i];
+    return null;
+  }
+  function capHit(p, year) { var r = row(p, year); return r ? r.cap : 0; }
+  function yearsLeft(p, year) { return (p.years || []).filter(function (r) { return r.y >= year && !r.void; }).length; }
+  function opt(r) { return r.opt || 0; }
+  function recalc(r) { r.cap = r.base + r.pro + opt(r) + r.roster + r.other; return r; }
+  function remaining(p, year) { return (p.years || []).filter(function (r) { return r.y >= year; }); }
+  function sum(arr, f) { var s = 0; for (var i = 0; i < arr.length; i++) s += f(arr[i]); return s; }
+  function gtdLeft(p, year) { return sum(remaining(p, year), function (r) { return r.gtd; }); }
+  function contractValueLeft(p, year) { return sum(remaining(p, year), function (r) { return r.base + r.roster + r.other; }); }
+
+  // Exercise pending option bonuses due in `year` (teams exercise them when the league year's games start).
+  // The option's proration becomes real (dead-money) proration, and a guaranteed option bonus leaves gtd.
+  function exerciseOptions(p, year) {
+    if (!p.options || !p.options.length) return 0;
+    var done = 0;
+    p.options = p.options.filter(function (op) {
+      if (op.y !== year) return true;
+      for (var y = op.y; y < op.y + op.span; y++) {
+        var r = row(p, y);
+        if (r) { var m = Math.min(op.per, opt(r)); r.opt = opt(r) - m; r.pro += m; }
+      }
+      var r0 = row(p, year);
+      if (r0) {
+        var cashGtd = r0.base + r0.roster;
+        r0.gtd = Math.max(0, r0.gtd - Math.min(op.per * op.span, Math.max(0, r0.gtd - cashGtd)));
+      }
+      done++;
+      return false;
+    });
+    return done;
+  }
+  // Contract has run out of real years: leftover void-year proration accelerates as dead money.
+  function voidAcceleration(p, year) {
+    var rows = remaining(p, year);
+    if (!rows.length || !rows.every(function (r) { return r.void; })) return 0;
+    return sum(rows, function (r) { return r.pro; });
+  }
+
+  // ---- Release ----
+  // Pre-June 1: every remaining prorated bonus dollar and all remaining guaranteed salary hit this year.
+  // Post-June 1 (or June 1 designation): this year's proration plus all remaining guaranteed salary hit
+  // now; the later years' proration moves to next year's cap. (Same convention as OverTheCap.)
+  function releaseCost(p, year, postJune1) {
+    var rem = remaining(p, year);
+    if (!rem.length) return { dead: {}, savings: 0, capHit: 0 };
+    var cur = rem[0], later = rem.slice(1);
+    var hit = cur.cap;
+    var dead = {};
+    var allGtd = sum(rem, function (r) { return r.gtd; });
+    if (!postJune1) {
+      dead[year] = sum(rem, function (r) { return r.pro; }) + allGtd;
+    } else {
+      dead[year] = cur.pro + allGtd;
+      var nxt = sum(later, function (r) { return r.pro; });
+      if (nxt) dead[year + 1] = nxt;
+    }
+    return { dead: dead, savings: hit - dead[year], capHit: hit, totalDead: sum(Object.keys(dead), function (k) { return dead[k]; }) };
+  }
+
+  function applyDead(team, dead) {
+    team.dead = team.dead || {};
+    Object.keys(dead).forEach(function (y) { if (dead[y]) team.dead[y] = (team.dead[y] || 0) + dead[y]; });
+  }
+
+  // ---- Trade ----
+  // The old team keeps all unamortised signing bonus as dead money (pre-June 1: all now; post-June 1: this
+  // year's share now, the rest next year). The new team takes base/roster/other salary and the guarantees.
+  function tradeCost(p, year, postJune1) {
+    var rem = remaining(p, year);
+    var dead = {};
+    if (rem.length) {
+      if (!postJune1) dead[year] = sum(rem, function (r) { return r.pro; });
+      else { dead[year] = rem[0].pro; var n = sum(rem.slice(1), function (r) { return r.pro; }); if (n) dead[year + 1] = n; }
+    }
+    var newYears = rem.map(function (r) {
+      var n = { y: r.y, base: r.base, pro: 0, opt: opt(r), roster: r.roster, other: r.other, gtd: r.gtd };
+      if (r.void) n.void = true;
+      return recalc(n);
+    }).filter(function (r) { return !r.void || r.cap > 0; });
+    return { dead: dead, oldSavings: (rem[0] ? rem[0].cap : 0) - (dead[year] || 0), newYears: newYears, newHit: newYears[0] ? newYears[0].cap : 0 };
+  }
+
+  // ---- Building a new contract from an offer ----
+  // offer = {years, total, bonus, gtd} in $K. Salary escalates ~5% a year after a low first-year base
+  // (the usual way teams create cap room). Guarantees cover the signing bonus first, then salary in order.
+  function buildContract(offer, startYear, exp) {
+    var n = Math.max(1, Math.min(7, offer.years | 0));
+    var total = Math.max(0, offer.total | 0);
+    var bonus = Math.max(0, Math.min(total, offer.bonus | 0));
+    var gtd = Math.max(bonus, Math.min(total, offer.gtd | 0));
+    var proYears = Math.min(n, MAX_PRORATION_YEARS);
+    var salaryPool = total - bonus;
+    // escalating weights; first year slightly lower when there's a bonus
+    var w = [];
+    for (var i = 0; i < n; i++) w.push(Math.pow(1.05, i));
+    var ws = w.reduce(function (a, b) { return a + b; }, 0);
+    var years = [], assigned = 0, gtdSalary = gtd - bonus, proAssigned = 0;
+    for (var j = 0; j < n; j++) {
+      var y = startYear + j;
+      var base = j === n - 1 ? salaryPool - assigned : Math.round(salaryPool * w[j] / ws);
+      var floor = minSalary((exp | 0) + j, y);
+      years.push({ y: y, base: base, pro: 0, opt: 0, roster: 0, other: 0, gtd: 0, cap: 0, _floor: floor });
+      assigned += base;
+    }
+    // enforce league minimum on each year by pulling from later years
+    for (var a = 0; a < n; a++) {
+      var need = years[a]._floor - years[a].base;
+      for (var b = n - 1; need > 0 && b > a; b--) {
+        var give = Math.min(need, years[b].base - years[b]._floor);
+        if (give > 0) { years[b].base -= give; years[a].base += give; need -= give; }
+      }
+      if (need > 0) years[a].base += need;   // total was below the league minimum: raise it
+      delete years[a]._floor;
+    }
+    for (var k = 0; k < n; k++) {
+      var r = years[k];
+      if (k < proYears) {
+        r.pro = k === proYears - 1 ? bonus - proAssigned : Math.round(bonus / proYears);
+        proAssigned += r.pro;
+      }
+      var g = Math.min(gtdSalary, r.base);
+      r.gtd = g; gtdSalary -= g;
+      recalc(r);
+    }
+    return years;
+  }
+
+  // Extension: years still on the old deal keep their prorated bonus; the new money replaces their salary
+  // and the new deal runs `offer.years` seasons from startYear (counting the old remaining years).
+  function buildExtension(p, offer, startYear) {
+    var newYears = buildContract(offer, startYear, p.exp);
+    var old = remaining(p, startYear);
+    old.forEach(function (o) {
+      var r = newYears.filter(function (x) { return x.y === o.y; })[0];
+      if (r) { r.pro += o.pro; r.opt = opt(o); recalc(r); }
+      else newYears.push(recalc({ y: o.y, base: 0, pro: o.pro, opt: opt(o), roster: 0, other: 0, gtd: 0, void: true })); // old proration beyond new term
+    });
+    newYears.sort(function (a, b) { return a.y - b.y; });
+    return newYears;
+  }
+
+  // Restructure: convert this year's base salary (above the minimum) into a signing bonus prorated over
+  // the remaining real contract years (max 5). Saves cap now, pushes it to later years.
+  function restructureMax(p, year, exp) {
+    var r = row(p, year);
+    if (!r || r.void || yearsLeft(p, year) < 2) return 0;
+    return Math.max(0, r.base - minSalary(exp, year));
+  }
+  function restructure(p, year, amount, exp) {
+    var amt = Math.min(Math.max(0, amount | 0), restructureMax(p, year, exp));
+    if (!amt) return { saved: 0 };
+    var real = remaining(p, year).filter(function (x) { return !x.void; });
+    var n = Math.min(MAX_PRORATION_YEARS, real.length), per = Math.floor(amt / n), left = amt;
+    var r = row(p, year);
+    r.base -= amt;
+    r.gtd = Math.max(0, r.gtd - amt);   // guaranteed salary is now paid as bonus
+    for (var i = 0; i < n; i++) { var add = i === n - 1 ? left : per; real[i].pro += add; left -= add; recalc(real[i]); }
+    return { saved: amt - per, amount: amt, years: n };
+  }
+
+  // Pre-pay: move future base salary into this year (renegotiated raise now, pay cut later). Uses cap
+  // space now and frees it later; how teams with lots of room avoid wasting it.
+  function prepay(p, year, amount, exp) {
+    var rows = remaining(p, year).filter(function (r) { return !r.void; });
+    var cur = rows[0]; if (!cur || rows.length < 2) return 0;
+    var moved = 0;
+    for (var i = rows.length - 1; i > 0 && moved < amount; i--) {
+      var r = rows[i], room = r.base - minSalary((exp | 0) + i, r.y);
+      var m = Math.min(room, amount - moved);
+      if (m > 0) { r.base -= m; r.gtd = Math.min(r.gtd, r.base); recalc(r); moved += m; }
+    }
+    cur.base += moved; recalc(cur);
+    return moved;
+  }
+
+  function apy(years) { var real = years.filter(function (r) { return !r.void; }); return real.length ? Math.round(sum(years, function (r) { return r.cap; }) / real.length) : 0; }
+
+  // ---- Team totals ----
+  function teamCap(team, year) {
+    // adjusted cap = league cap + rollover carried into this year
+    return (team.capBase && team.capBase[year] != null ? team.capBase[year] : 0) + ((team.rollover || {})[year] || 0);
+  }
+  function teamCommitted(players, team, year) {
+    return sum(players.filter(function (p) { return p.team === team.abbr; }), function (p) { return capHit(p, year); });
+  }
+  function teamDead(team, year) { return (team.dead || {})[year] || 0; }
+  function capSpace(players, team, year) { return teamCap(team, year) - teamCommitted(players, team, year) - teamDead(team, year); }
+
+  function leagueCap(baseCap, baseYear, year) { return Math.round(baseCap * Math.pow(1 + CAP_GROWTH, year - baseYear)); }
+
+  // Rollover at the end of a league year: unused space carries into next year (as the CBA allows).
+  function rollover(players, team, year) {
+    var left = Math.max(0, capSpace(players, team, year));
+    team.rollover = team.rollover || {};
+    team.rollover[year + 1] = left;
+    return left;
+  }
+
+  // ---- Rookie wage scale (approximate, 2027 slotting; grows with the cap) ----
+  // pick 1 ~ $48.0M/4yr, pick 32 ~ $13.5M, pick 33 ~ $10.6M, pick 100 ~ $4.8M, day 3 late ~ league minimum.
+  function rookieDeal(overall, year, capNow) {
+    var scale = capNow / 326500;
+    var raw = overall <= 32 ? 48000 * Math.pow(overall, -0.366) : 10600 * Math.pow(overall / 33, -0.716);
+    var total = Math.round(Math.max(4 * minSalary(0, year) + 60, raw * scale));
+    var bonusShare = overall <= 32 ? 0.65 : overall <= 64 ? 0.4 : 0.15;
+    var bonus = Math.round(total * bonusShare);
+    var gtd = overall <= 32 ? total : overall <= 64 ? Math.round(total * 0.55) : bonus;
+    return { years: 4, total: total, bonus: bonus, gtd: gtd };
+  }
+
+  return {
+    minSalary: minSalary, row: row, capHit: capHit, yearsLeft: yearsLeft, remaining: remaining, gtdLeft: gtdLeft,
+    contractValueLeft: contractValueLeft, releaseCost: releaseCost, applyDead: applyDead, tradeCost: tradeCost,
+    buildContract: buildContract, buildExtension: buildExtension, apy: apy, teamCap: teamCap,
+    teamCommitted: teamCommitted, teamDead: teamDead, capSpace: capSpace, leagueCap: leagueCap, rollover: rollover,
+    rookieDeal: rookieDeal, restructure: restructure, prepay: prepay, restructureMax: restructureMax, exerciseOptions: exerciseOptions, voidAcceleration: voidAcceleration, recalc: recalc, MAX_PRORATION_YEARS: MAX_PRORATION_YEARS, MIN_ROSTER_FOR_SEASON: MIN_ROSTER_FOR_SEASON
+  };
+})();
+
+// Market value, contract demands, offer evaluation, trade value. Money in $K.
+var Market = (function () {
+  'use strict';
+
+  // Average APY of the top 3 veteran contracts at each position, as a share of the 2027 cap
+  // (computed from the OverTheCap data in scripts/build_data.py).
+  var TOP_SHARE = { QB: .183, EDGE: .144, WR: .120, DL: .111, CB: .100, OT: .089, IOL: .078, S: .073,
+                    RB: .068, LB: .068, TE: .058, K: .021, P: .012, LS: .0054 };
+  // How much each position drives winning (used for team strength and trade needs)
+  var POS_WEIGHT = { QB: 3.2, OT: 1.0, IOL: 0.7, WR: 1.0, TE: 0.6, RB: 0.5, EDGE: 1.2, DL: 0.9, LB: 0.6,
+                     CB: 1.0, S: 0.7, K: 0.3, P: 0.15, LS: 0.05 };
+  var STARTERS = { QB: 1, RB: 1, WR: 3, TE: 1, OT: 2, IOL: 3, EDGE: 2, DL: 2, LB: 2, CB: 3, S: 2, K: 1, P: 1, LS: 1 };
+  var PEAK = { QB: [27, 33], RB: [23, 26], WR: [24, 29], TE: [25, 30], OT: [25, 31], IOL: [25, 31], EDGE: [24, 29],
+               DL: [24, 30], LB: [24, 28], CB: [23, 28], S: [24, 29], K: [25, 36], P: [25, 36], LS: [25, 36] };
+
+  function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
+
+  // Expected overall `n` seasons ahead (deterministic part of progression).
+  function projOvr(p, n) {
+    var o = p.ovr, age = p.age, pk = PEAK[p.pos] || [25, 30];
+    for (var i = 0; i < n; i++) {
+      if (age < pk[0]) o += Math.min(4, Math.max(0, (p.pot - o) * 0.35));
+      else if (age > pk[1]) o -= age - pk[1] <= 2 ? 2 : age - pk[1] <= 4 ? 4 : 6;
+      age++;
+    }
+    return clamp(Math.round(o), 30, 99);
+  }
+
+  // fitted so pay by rating tracks real APY by positional rank (e.g. WR: 95 ~ $34M, 90 ~ $25M, 80 ~ $10M, 70 ~ $2.5M)
+  function talentCurve(ovr) { return Math.pow(clamp((ovr - 55) / 42, 0, 1), 2.6); }
+
+  // Fair yearly salary for a player at a given overall, in a league year with cap `cap`.
+  var scale = 1;   // league-wide pay level, calibrated at new game so total demand ~ total cap
+  function setScale(x) { scale = x; }
+  function valueAt(pos, ovr, cap, exp, year) {
+    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * TOP_SHARE[pos] * talentCurve(ovr) * scale));
+  }
+  // Pick the scale so the best 53 x 32 players' fair salaries add up to `share` of all 32 caps.
+  function calibrate(players, cap, year, share) {
+    scale = 1;
+    var best = players.slice().sort(function (a, b) { return b.ovr - a.ovr; }).slice(0, 53 * 32);
+    var tot = 0;
+    best.forEach(function (p) { tot += valueAt(p.pos, p.ovr, cap, p.exp, year); });
+    var mins = best.length * Cap.minSalary(3, year);
+    scale = Math.max(0.5, (share * 32 * cap - mins) / Math.max(1, tot - mins));
+    return scale;
+  }
+
+  // What the player asks for. Uses the next two seasons' expected rating (teams pay for the future).
+  function demand(p, cap, year) {
+    var o = Math.round((projOvr(p, 0) * 2 + projOvr(p, 1)) / 3);
+    var apy = valueAt(p.pos, o, cap, p.exp, year);
+    var age = p.age;
+    var years = age <= 25 ? 5 : age <= 27 ? 4 : age <= 29 ? 3 : age <= 31 ? 2 : 1;
+    if (apy < 3000) years = Math.min(years, 2);
+    var gShare = clamp(0.2 + 0.55 * talentCurve(o), 0.05, 0.75);
+    if (apy <= Cap.minSalary(p.exp, year) + 200) gShare = 0;
+    return { apy: apy, years: years, gtd: Math.round(apy * years * gShare), ovrBasis: o };
+  }
+
+  // Seeded per-player noise in [-1, 1] so a player's reaction is stable (no save-scumming by re-asking).
+  function noise(id, salt) {
+    var h = 2166136261;
+    var s = id + '|' + salt;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return ((h >>> 0) % 2001) / 1000 - 1;
+  }
+
+  // Evaluate an offer. ctx = {cap, year, teamOvr, isOwnTeam, rejections, fa (true in free agency), daysIntoFA}
+  // Returns {accept, mood (1.0 = exactly satisfied), ask, notes:[{k, good}]}
+  function evaluate(p, offer, ctx) {
+    var d = demand(p, ctx.cap, ctx.year);
+    var yrs = Math.max(1, offer.years);
+    var total = offer.total, gtd = Math.max(offer.gtd || 0, offer.bonus || 0);
+    // value players put on an offer: guaranteed money counts extra; bonus paid now counts a bit extra
+    var val = total + 0.45 * gtd + 0.10 * (offer.bonus || 0);
+    // compare against the same length of deal at their asking APY
+    var askTotal = d.apy * yrs;
+    var askGtd = Math.min(askTotal, d.gtd / d.years * yrs);
+    var ask = askTotal + 0.45 * askGtd + 0.10 * askGtd * 0.5;
+    var mood = val / Math.max(1, ask);
+    // contract length preference: young players want shorter-or-equal, vets want security (longer)
+    var lenGap = yrs - d.years;
+    var lenPen = p.age >= 29 ? (lenGap < 0 ? -lenGap * 0.06 : 0) : Math.abs(lenGap) * 0.025;
+    mood -= lenPen;
+    // team strength: older players chase rings
+    var win = (ctx.teamOvr - 75) / 100 * (p.age >= 29 ? 1.6 : 0.7);
+    mood += win;
+    if (ctx.isOwnTeam) mood += 0.02;                         // small loyalty bump
+    if (ctx.fa) mood += faDiscount(ctx.daysIntoFA);           // asking price softens as FA drags on
+    mood -= (ctx.rejections || 0) * 0.02;                    // repeated lowballs annoy
+    var threshold = 1 + noise(p.id, ctx.year) * 0.03;
+    var notes = [
+      { k: 'money', good: val / ask >= 0.98 },
+      { k: 'guarantees', good: gtd >= askGtd * 0.9 },
+      { k: 'length', good: lenPen < 0.03 },
+      { k: 'contender', good: win >= 0 },
+    ];
+    return { accept: mood >= threshold, mood: mood / threshold, ask: d, notes: notes };
+  }
+
+  // How far a free agent's price has dropped after `days` of free agency (0 at open, ~40% late).
+  function faDiscount(days) { return Math.min(0.25, Math.max(0, days || 0) * 0.045); }
+
+  // ---- trade values, in "surplus $K" ----
+  var DISCOUNT = 0.85;
+  function playerTradeValue(p, year, cap, viewer) {
+    var rows = Cap.remaining(p, year).filter(function (r) { return !r.void; });
+    var v = 0;
+    var n = Math.max(1, Math.min(4, rows.length));
+    for (var i = 0; i < n; i++) {
+      var o = projOvr(p, i);
+      var worth = valueAt(p.pos, o, cap * Math.pow(1.07, i), p.exp + i, year + i);
+      var cost = rows[i] ? rows[i].cap : worth;             // after the deal ends he'd cost market price
+      v += Math.pow(DISCOUNT, i) * (worth * 1.15 - cost);   // surplus
+      v += Math.pow(DISCOUNT, i) * worth * 0.35;            // you also just get a good player
+    }
+    // remaining guaranteed money/dead money is a liability for the acquirer only through cap cost (already in)
+    if (viewer && viewer.rebuilding) v *= p.age <= 26 ? 1.15 : p.age >= 30 ? 0.6 : 0.9;
+    return Math.round(v);
+  }
+
+  // pick: {year, round, ovr (overall pick no., may be estimated)}
+  function pickValue(pick, year, viewer) {
+    var no = pick.no || (pick.round - 1) * 32 + 16;
+    var v = 62000 * Math.exp(-0.0185 * (no - 1)) + 600;
+    v *= Math.pow(0.85, Math.max(0, pick.year - year));
+    if (viewer && viewer.rebuilding) v *= 1.15;
+    return Math.round(v);
+  }
+
+  return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
+           valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
+           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, calibrate: calibrate, getScale: function () { return scale; } };
+})();
+
+// League state, rosters, depth charts, transactions, AI front offices.
+var S = null;          // the save
+var BASE = null;       // data.json meta
+
+var PHASES = ['resign', 'fa', 'draft', 'preseason', 'season', 'playoffs'];
+var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft', preseason: 'Preseason cutdown',
+                    season: 'Regular season', playoffs: 'Playoffs' };
+var ROSTER_MAX_OFF = 90, ROSTER_MAX = 53, FA_DAYS = 6, TRADE_DEADLINE_WEEK = 9;
+
+function newGame(data, userAbbr) {
+  BASE = data.meta;
+  S = { v: 1, seed: (Date.now() % 1e9) | 0, year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
+        user: userAbbr, teams: {}, picks: [], players: [], schedule: [], news: [], playoffs: null, history: [],
+        draft: null, nextId: 1, june1: {}, lastOrder: null, awards: [] };
+  RNG.s = S.seed;
+  TEAMS.forEach(function (t) {
+    S.teams[t.abbr] = { abbr: t.abbr, capBase: {}, dead: {}, rollover: {}, rec: newRec(), depth: {} };
+  });
+  data.players.forEach(function (src) {
+    var p = JSON.parse(JSON.stringify(src));
+    p.inj = 0; p.s = {}; p.car = {}; p.rej = 0;
+    p.rights = p.team ? null : p.prevTeam;   // own team can re-sign expiring players in the re-sign window
+    if (p.team && !TEAM[p.team]) p.team = null;
+    S.players.push(p);
+  });
+  for (var y = S.year; y < S.year + 3; y++) addPicks(y);
+  // starting rating distribution per position, used to keep the league's talent level stable over time
+  S.dist = {};
+  POSITIONS.forEach(function (pos) { S.dist[pos] = S.players.filter(function (p) { return p.pos === pos; }).map(function (p) { return p.ovr; }).sort(function (a, b) { return b - a; }); });
+  // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
+  S.payScale = Market.calibrate(S.players, capOf(S.year), S.year, 0.88);
+  TEAMS.forEach(function (t) { autoDepth(t.abbr); });
+  news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
+  return S;
+}
+
+function newRec() { return { w: 0, l: 0, t: 0, pf: 0, pa: 0, dw: 0, dl: 0, cw: 0, cl: 0 }; }
+function addPicks(year) {
+  TEAMS.forEach(function (t) {
+    for (var r = 1; r <= 7; r++) S.picks.push({ id: year + '-' + r + '-' + t.abbr, year: year, round: r, orig: t.abbr, owner: t.abbr, no: null });
+  });
+}
+function news(msg, team) { S.news.unshift({ y: S.year, ph: S.phase, w: S.week, msg: msg, team: team || null }); if (S.news.length > 300) S.news.length = 300; }
+
+// ---------- lookups ----------
+function P(id) { return S._idx ? S._idx[id] : S.players.filter(function (p) { return p.id === id; })[0]; }
+function reindex() { S._idx = {}; S.players.forEach(function (p) { S._idx[p.id] = p; }); }
+function roster(abbr) { return S.players.filter(function (p) { return p.team === abbr; }); }
+function freeAgents() { return S.players.filter(function (p) { return !p.team && !p.retired && !p.prospect; }); }
+function capOf(year) { return Cap.leagueCap(BASE.cap, BASE.startYear, year); }
+// The money actually available: league cap plus the average rollover. Player prices follow this.
+function marketCap() {
+  var y = S.year, roll = 0;
+  TEAMS.forEach(function (t) { roll += (S.teams[t.abbr].rollover || {})[y] || 0; });
+  return capOf(y) + roll / 32;
+}
+function T(abbr) {
+  var t = S.teams[abbr];
+  for (var y = S.year; y < S.year + 6; y++) if (t.capBase[y] == null) t.capBase[y] = capOf(y);
+  return t;
+}
+function space(abbr, year) { return Cap.capSpace(S.players, T(abbr), year || S.year); }
+function isPostJune() { return S.phase === 'preseason' || S.phase === 'season' || S.phase === 'playoffs'; }
+function rosterMax() { return S.phase === 'season' || S.phase === 'playoffs' ? ROSTER_MAX : ROSTER_MAX_OFF; }
+function picksOf(abbr) { return S.picks.filter(function (k) { return k.owner === abbr; }).sort(byKey(function (k) { return k.year * 100 + k.round; })); }
+function pickLabel(k) { return k.year + ' R' + k.round + (k.no ? ' #' + k.no : '') + (k.orig !== k.owner ? ' (' + k.orig + ')' : ''); }
+
+// ---------- depth chart and team strength ----------
+function healthy(p) { return !p.inj; }
+function autoDepth(abbr) {
+  var t = S.teams[abbr], ros = roster(abbr);
+  POSITIONS.forEach(function (pos) {
+    var at = ros.filter(function (p) { return p.pos === pos; });
+    var keep = (abbr === S.user && t.depth[pos]) ? t.depth[pos].filter(function (id) { return at.some(function (p) { return p.id === id; }); }) : [];
+    var rest = at.filter(function (p) { return keep.indexOf(p.id) < 0; }).sort(byKey(function (p) { return p.ovr; }, true));
+    t.depth[pos] = keep.concat(rest.map(function (p) { return p.id; }));
+  });
+}
+function starters(abbr, pos) {
+  var ids = (S.teams[abbr].depth[pos] || []);
+  var out = [];
+  for (var i = 0; i < ids.length && out.length < Market.STARTERS[pos]; i++) { var p = P(ids[i]); if (p && p.team === abbr && healthy(p)) out.push(p); }
+  return out;
+}
+var OFF = ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL'], DEF = ['EDGE', 'DL', 'LB', 'CB', 'S'], ST = ['K', 'P'];
+function unitRating(abbr, list) {
+  var num = 0, den = 0;
+  list.forEach(function (pos) {
+    var st = starters(abbr, pos), n = Market.STARTERS[pos], w = Market.POS_WEIGHT[pos];
+    for (var i = 0; i < n; i++) { num += w * (st[i] ? st[i].ovr : 35); den += w; }
+  });
+  return den ? num / den : 50;
+}
+function teamRating(abbr) {
+  var o = unitRating(abbr, OFF), d = unitRating(abbr, DEF), s = unitRating(abbr, ST);
+  return { off: Math.round(o), def: Math.round(d), st: Math.round(s), ovr: Math.round(o * 0.52 + d * 0.43 + s * 0.05) };
+}
+
+// ---------- needs ----------
+function needAt(abbr, pos, extra) {
+  // how much a player of rating `extra` would lift this position group (0 if not)
+  var st = starters(abbr, pos), n = Market.STARTERS[pos];
+  var worst = st.length < n ? 35 : Math.min.apply(null, st.map(function (p) { return p.ovr; }));
+  return Math.max(0, (extra == null ? 80 : extra) - worst);
+}
+function teamNeeds(abbr) {
+  return POSITIONS.filter(function (pos) { return pos !== 'LS'; }).map(function (pos) { return { pos: pos, gap: needAt(abbr, pos, 80) * Market.POS_WEIGHT[pos] }; })
+    .filter(function (n) { return n.gap > 4; }).sort(byKey(function (n) { return n.gap; }, true));
+}
+
+// ---------- transactions ----------
+function validateCap(abbr, delta) { return space(abbr) + delta >= 0; }
+
+function releasePreview(p, june1) {
+  var post = isPostJune() || !!june1;
+  var c = Cap.releaseCost(p, S.year, post);
+  return { post: post, dead: c.dead, savings: c.savings, now: c.dead[S.year] || 0, next: c.dead[S.year + 1] || 0 };
+}
+function canJune1(abbr) { return !isPostJune() && ((S.june1[S.year + abbr] || 0) < 2); }
+
+function release(p, june1) {
+  var abbr = p.team, pv = releasePreview(p, june1);
+  if (!validateCap(abbr, pv.savings)) return { ok: false, msg: 'Releasing him would put you over the cap (savings ' + fmtM(pv.savings) + ').' };
+  if (june1 && !isPostJune()) {
+    if (!canJune1(abbr)) return { ok: false, msg: 'Teams get two post-June 1 designations a year.' };
+    S.june1[S.year + abbr] = (S.june1[S.year + abbr] || 0) + 1;
+  }
+  Cap.applyDead(T(abbr), pv.dead);
+  p.team = null; p.years = []; p.options = []; p.rights = null; p.rej = 0; p.cutBy = abbr;
+  autoDepth(abbr);
+  news(TEAM[abbr].name + ' released ' + p.pos + ' ' + p.name + (pv.post ? ' (post-June 1)' : '') + ': ' + fmtM(pv.now) + ' dead' + (pv.next ? ' now, ' + fmtM(pv.next) + ' next year' : '') + '.', abbr);
+  return { ok: true };
+}
+
+function sign(p, abbr, offer, silent) {
+  if (roster(abbr).length >= rosterMax()) return { ok: false, msg: 'Roster is full (' + rosterMax() + ').' };
+  var yrs = Cap.buildContract(offer, S.year, p.exp);
+  if (!validateCap(abbr, -yrs[0].cap)) return { ok: false, msg: 'Not enough cap space: first-year hit is ' + fmtM(yrs[0].cap) + ', you have ' + fmtM(space(abbr)) + '.' };
+  var wasRights = p.rights;
+  // AI teams with lots of room front-load new deals (pay more now, less later) instead of banking it
+  if (abbr !== S.user || S.autopilot) {
+    var excess = space(abbr) - yrs[0].cap - 25000;
+    if (excess > 0 && yrs.length > 1) Cap.prepay({ years: yrs }, S.year, Math.round(excess * 0.35), p.exp);
+  }
+  p.team = abbr; p.years = yrs; p.options = []; p.rights = null; p.rej = 0; p.signed = S.year; p.apy = Cap.apy(yrs);
+  p.gtdTotal = Math.max(offer.gtd || 0, offer.bonus || 0);
+  autoDepth(abbr);
+  if (!silent || abbr === S.user || p.ovr >= 80)
+    news(TEAM[abbr].name + (wasRights === abbr ? ' re-signed ' : ' signed ') + p.pos + ' ' + p.name + ': ' + offer.years + ' yr, ' + fmtM(offer.total) + ' (' + fmtM(p.gtdTotal) + ' gtd).', abbr);
+  return { ok: true };
+}
+
+function extensionStart() { return isPostJune() ? S.year + 1 : S.year; }
+function buildExtensionYears(p, offer) {
+  var start = extensionStart();
+  var before = p.years.filter(function (r) { return r.y < start; });
+  return before.concat(Cap.buildExtension(p, offer, start));
+}
+function extend(p, offer) {
+  var yrs = buildExtensionYears(p, offer);
+  var delta = Cap.capHit(p, S.year) - (Cap.row({ years: yrs }, S.year) || { cap: 0 }).cap;
+  if (!validateCap(p.team, delta)) return { ok: false, msg: 'The new deal does not fit under this year\'s cap.' };
+  p.years = yrs; p.options = (p.options || []).filter(function (o) { return o.y < extensionStart(); });
+  p.apy = Cap.apy(yrs.filter(function (r) { return r.y >= extensionStart(); })); p.signed = S.year; p.rej = 0;
+  p.gtdTotal = Math.max(offer.gtd || 0, offer.bonus || 0);
+  news(TEAM[p.team].name + ' extended ' + p.pos + ' ' + p.name + ': ' + offer.years + ' yr, ' + fmtM(offer.total) + '.', p.team);
+  return { ok: true };
+}
+function canExtend(p) { return p.team && Cap.yearsLeft(p, S.year) <= 2 && S.phase !== 'playoffs'; }
+
+// offer context for Market.evaluate
+function offerCtx(p, abbr) {
+  return { cap: marketCap(), year: S.year, teamOvr: teamRating(abbr).ovr, isOwnTeam: p.team === abbr || p.rights === abbr,
+           rejections: p.rej || 0, fa: S.phase === 'fa' || S.phase === 'draft' || S.phase === 'preseason' || S.phase === 'season',
+           daysIntoFA: S.phase === 'fa' ? S.faDay : S.phase === 'resign' ? 0 : FA_DAYS + 2 };
+}
+
+// ---------- trades ----------
+// side = {players:[ids], picks:[ids]}
+function tradeCapDelta(abbr, out, inc) {
+  var post = isPostJune(), d = 0;
+  out.forEach(function (p) { d += Cap.tradeCost(p, S.year, post).oldSavings; });
+  inc.forEach(function (p) { d -= Cap.tradeCost(p, S.year, post).newHit; });
+  return d;
+}
+function assetValue(viewer, players, picks) {
+  var reb = teamRating(viewer).ovr < 70;
+  var v = { rebuilding: reb };
+  return sumBy(players, function (p) { return Market.playerTradeValue(p, S.year, marketCap(), v); }) +
+         sumBy(picks, function (k) { return Market.pickValue(k, S.year, v); });
+}
+function aiTradeEval(ai, aiGets, aiGives) {
+  var gp = aiGets.players.map(P), gk = aiGets.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
+  var op = aiGives.players.map(P), ok_ = aiGives.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
+  var get = 0, give = 0;
+  gp.forEach(function (p) {
+    var v = assetValue(ai, [p], []);
+    var lift = needAt(ai, p.pos, p.ovr);
+    v = v >= 0 ? v * (lift > 5 ? 1.2 : lift > 0 ? 1.0 : 0.75) : v;  // they want players who start for them
+    get += v;
+  });
+  gk.forEach(function (k) { get += assetValue(ai, [], [k]); });
+  op.forEach(function (p) {
+    var v = assetValue(ai, [p], []);
+    var st = starters(ai, p.pos).some(function (s) { return s.id === p.id; });
+    give += v > 0 ? v * (st ? 1.15 : 1.0) : v * 0.9;
+  });
+  ok_.forEach(function (k) { give += assetValue(ai, [], [k]); });
+  var margin = 1500 + Math.abs(give) * 0.06;   // AI wants to win the trade a little
+  var need = give + margin;
+  var ratio = need <= 0 ? (get >= need ? 1.2 : 0.5) : get / need;
+  var msg = '';
+  var capAI = tradeCapDelta(ai, op, gp), capU = tradeCapDelta(S.user, gp, op);
+  var rosAI = roster(ai).length - op.length + gp.length, rosU = roster(S.user).length - gp.length + op.length;
+  var feasible = true;
+  if (space(ai) + capAI < 0) { feasible = false; msg = TEAM[ai].abbr + ' can\'t fit the incoming salary (' + fmtM(space(ai) + capAI) + ' after).'; }
+  else if (space(S.user) + capU < 0) { feasible = false; msg = 'You can\'t fit the incoming salary (' + fmtM(space(S.user) + capU) + ' after).'; }
+  else if (rosAI > rosterMax() || rosU > rosterMax()) { feasible = false; msg = 'Roster limit (' + rosterMax() + ') exceeded.'; }
+  else if (S.phase === 'season' && S.week > TRADE_DEADLINE_WEEK) { feasible = false; msg = 'The trade deadline has passed.'; }
+  else if (!gp.length && !gk.length && !op.length && !ok_.length) feasible = false;
+  return { get: get, give: give, ratio: ratio, accept: feasible && get >= need, feasible: feasible, msg: msg,
+           capAI: capAI, capUser: capU, short: Math.max(0, need - get) };
+}
+function executeTrade(ai, userGives, aiGives) {
+  var post = isPostJune();
+  function move(ids, from, to) {
+    ids.forEach(function (id) {
+      var p = P(id), tc = Cap.tradeCost(p, S.year, post);
+      Cap.applyDead(T(from), tc.dead);
+      p.years = tc.newYears; p.team = to; p.rej = 0;
+    });
+  }
+  move(userGives.players, S.user, ai); move(aiGives.players, ai, S.user);
+  userGives.picks.forEach(function (id) { S.picks.filter(function (k) { return k.id === id; })[0].owner = ai; });
+  aiGives.picks.forEach(function (id) { S.picks.filter(function (k) { return k.id === id; })[0].owner = S.user; });
+  autoDepth(ai); autoDepth(S.user);
+  var d = function (side) { return side.players.map(function (id) { var p = P(id); return p.pos + ' ' + p.name; }).concat(side.picks.map(function (id) { return pickLabel(S.picks.filter(function (k) { return k.id === id; })[0]); })).join(', '); };
+  news('Trade: ' + S.user + ' sends ' + d(userGives) + ' to ' + ai + ' for ' + d(aiGives) + '.', S.user);
+}
+// Suggest what the AI wants added to make a trade work: cheapest single user asset that covers the gap.
+function whatWouldItTake(ai, userGives, aiGives) {
+  var ev = aiTradeEval(ai, userGives, aiGives);
+  if (ev.accept) return { done: true };
+  var cands = [];
+  roster(S.user).forEach(function (p) {
+    if (userGives.players.indexOf(p.id) >= 0) return;
+    var g = { players: userGives.players.concat([p.id]), picks: userGives.picks };
+    var e = aiTradeEval(ai, g, aiGives);
+    if (e.accept) cands.push({ kind: 'player', id: p.id, label: p.pos + ' ' + p.name + ' (' + p.ovr + ')', cost: assetValue(S.user, [p], []) });
+  });
+  picksOf(S.user).forEach(function (k) {
+    if (userGives.picks.indexOf(k.id) >= 0) return;
+    var g = { players: userGives.players, picks: userGives.picks.concat([k.id]) };
+    var e = aiTradeEval(ai, g, aiGives);
+    if (e.accept) cands.push({ kind: 'pick', id: k.id, label: pickLabel(k), cost: assetValue(S.user, [], [k]) });
+  });
+  cands.sort(byKey(function (c) { return c.cost; }));
+  return { done: false, ev: ev, options: cands.slice(0, 3) };
+}
+
+// ---------- AI front offices ----------
+function aiOffer(p, abbr, mult) {
+  var d = Market.demand(p, marketCap(), S.year);
+  var total = Math.round(d.apy * d.years * (mult || 1));
+  var gtd = Math.min(total, Math.round(d.gtd * (mult || 1)));
+  return { years: d.years, total: total, bonus: Math.round(gtd * 0.5), gtd: gtd };
+}
+function aiTeams() { return TEAMS.map(function (t) { return t.abbr; }).filter(function (a) { return a !== S.user || S.autopilot; }); }
+
+function restructurePlayer(p, amount) {
+  var r = Cap.restructure(p, S.year, amount, p.exp);
+  if (r.saved) news(TEAM[p.team].name + ' restructured ' + p.pos + ' ' + p.name + ': ' + fmtM(r.amount) + ' converted to bonus, ' + fmtM(r.saved) + ' cap saved this year.', p.team);
+  return r;
+}
+
+// AI cap compliance: restructure big contracts first, then cut the worst value-for-money players.
+function aiCapFix(abbr, buffer) {
+  var guard = 0;
+  while (space(abbr) < buffer && guard++ < 40) {
+    var ros = roster(abbr);
+    var rc = ros.filter(function (p) { return p.age <= 32 && p.ovr >= 70 && Cap.restructureMax(p, S.year, p.exp) > 3000; })
+                .sort(byKey(function (p) { return Cap.restructureMax(p, S.year, p.exp); }, true))[0];
+    if (rc) { restructurePlayer(rc, Cap.restructureMax(rc, S.year, rc.exp)); continue; }
+    var cut = ros.map(function (p) { var pv = releasePreview(p, !isPostJune() && canJune1(abbr) && Cap.capHit(p, S.year) > 15000); return { p: p, pv: pv, s: pv.savings / 1000 - Math.max(0, p.ovr - 60) * 0.5 }; })
+                 .filter(function (x) { return x.pv.savings > 500; }).sort(byKey(function (x) { return x.s; }, true))[0];
+    if (!cut) break;
+    release(cut.p, cut.pv.post && !isPostJune());
+  }
+}
+
+// End of re-sign window: AI teams keep the expiring players they want; everyone else hits free agency.
+function aiResign() {
+  aiTeams().forEach(function (abbr) {
+    aiCapFix(abbr, 25000);
+    var mine = S.players.filter(function (p) { return !p.team && p.rights === abbr; }).sort(byKey(function (p) { return p.ovr; }, true));
+    mine.forEach(function (p) {
+      var want = p.ovr >= 62 && p.age <= 32 && (needAt(abbr, p.pos, p.ovr) > 0 || p.ovr >= 74);
+      if (!want || RNG.next() > (p.ovr >= 75 ? 0.92 : 0.75)) return;
+      var off = aiOffer(p, abbr, 1.0);
+      if (space(abbr) - Cap.buildContract(off, S.year, p.exp)[0].cap > 8000) sign(p, abbr, off, true);
+    });
+  });
+  S.players.forEach(function (p) { if (!p.team) p.rights = null; });
+}
+
+// One day of free agency: AI teams sign the best fits they can afford.
+function aiFreeAgencyDay() {
+  var order = RNG.shuffle(aiTeams());
+  var pool = freeAgents().sort(byKey(function (p) { return p.ovr; }, true));
+  var rookieRoom = S.phase === 'fa' || S.phase === 'resign' ? 14000 : 3000;   // keep room for rookies
+  for (var round = 0; round < 4; round++) {
+    order.forEach(function (abbr) {
+      if (roster(abbr).length >= rosterMax() - 2) return;
+      var sp = space(abbr);
+      var target = 3000 + rookieRoom;                 // teams aim to spend down to this much space
+      var disc = 1 - Market.faDiscount(S.faDay);
+      if (sp <= target) return;
+      var best = null, bestScore = 0;
+      for (var i = 0; i < pool.length && i < 300; i++) {
+        var p = pool[i];
+        if (p.team) continue;
+        var lift = needAt(abbr, p.pos, p.ovr) * Market.POS_WEIGHT[p.pos];
+        var depth = sp > capOf(S.year) * 0.15 ? Math.max(0, p.ovr - 68) * 0.25 : 0;   // rich teams buy depth too
+        if (lift + depth <= 0) continue;
+        var cost = Market.demand(p, marketCap(), S.year).apy * disc;
+        if (sp - cost > target - 2000) {
+          var score = (lift + depth) / Math.pow(cost / 1000 + 1, 0.35) * (0.85 + RNG.next() * 0.3);
+          if (score > bestScore) { best = p; bestScore = score; }
+        }
+      }
+      if (best) {
+        var mult = (0.95 + RNG.next() * 0.12) * disc;
+        var off = aiOffer(best, abbr, mult);
+        var ev = Market.evaluate(best, off, offerCtx(best, abbr));
+        if (!ev.accept && ev.mood < 0.95) off = aiOffer(best, abbr, mult + 0.08);
+        sign(best, abbr, off, true);
+      }
+    });
+  }
+}
+
+// Fill thin rosters with the best veterans they can afford late in the market (asks drop to ~70%),
+// or generated depth players if the pool runs dry.
+function aiFillRoster(target, teams) {
+  (teams || aiTeams()).forEach(function (abbr) {
+    var need = (target - roster(abbr).length) * 1100;
+    if (need > 0 && (abbr !== S.user || S.autopilot)) aiCapFix(abbr, need);
+    var guard = 0;
+    while (roster(abbr).length < target && guard++ < 80) {
+      var needs = POSITIONS.map(function (pos) {
+        var have = roster(abbr).filter(function (p) { return p.pos === pos; }).length;
+        return { pos: pos, short: depthTarget(pos) - have };
+      }).sort(byKey(function (n) { return n.short; }, true));
+      var pos = needs[0].pos;
+      var slots = target - roster(abbr).length;
+      var budget = (space(abbr) - slots * 1100) / Math.max(2, slots / 3);
+      var cands = freeAgents().filter(function (p) { return p.pos === pos; }).sort(byKey(function (p) { return p.ovr; }, true));
+      var p = null, price = 0;
+      for (var i = 0; i < cands.length; i++) {
+        var c = cands[i], min = Cap.minSalary(c.exp, S.year);
+        var pr = Math.max(min, Math.round(Market.demand(c, marketCap(), S.year).apy * 0.6));
+        if (pr <= Math.max(min * 1.3, budget)) { p = c; price = pr; break; }
+      }
+      if (!p) { p = makeFiller(pos); price = Cap.minSalary(p.exp, S.year); }
+      var r = sign(p, abbr, { years: 1, total: price, bonus: 0, gtd: 0 }, true);
+      if (!r.ok) break;
+    }
+  });
+}
+
+// AI teams with lots of room pre-pay future salary so unused space doesn't pile up via rollover.
+function aiPrepay(keep) {
+  aiTeams().forEach(function (abbr) {
+    var excess = space(abbr) - keep;
+    if (excess <= 0) return;
+    roster(abbr).filter(function (p) { return Cap.yearsLeft(p, S.year) >= 2; })
+      .sort(byKey(function (p) { return Cap.capHit(p, S.year + 1); }, true))
+      .forEach(function (p) { if (excess > 0) excess -= Cap.prepay(p, S.year, excess, p.exp); });
+  });
+}
+
+// AI extends good players entering the last year of their deal (keeps cores together, uses cap).
+function aiExtensions() {
+  aiTeams().forEach(function (abbr) {
+    var rich = space(abbr) > capOf(S.year) * 0.08;
+    roster(abbr).filter(function (p) { return Cap.yearsLeft(p, S.year) <= (rich ? 2 : 1) && p.ovr >= (rich ? 70 : 75) && p.age <= 30; }).forEach(function (p) {
+      if (!rich && RNG.next() < 0.5) return;
+      var off = aiOffer(p, abbr, 1.02);
+      var yrs = buildExtensionYears(p, off);
+      var delta = Cap.capHit(p, S.year) - (Cap.row({ years: yrs }, S.year) || { cap: 0 }).cap;
+      if (space(abbr) + delta > 10000 && Market.evaluate(p, off, offerCtx(p, abbr)).accept) extend(p, off);
+    });
+  });
+}
+
+var DEPTH_TARGET = { QB: 3, RB: 4, WR: 6, TE: 3, OT: 4, IOL: 5, EDGE: 5, DL: 5, LB: 5, CB: 6, S: 4, K: 1, P: 1, LS: 1 };
+function depthTarget(pos) { return DEPTH_TARGET[pos]; }
+
+// Cut down to 53: drop the least useful players, avoiding big dead money.
+function cutdown(abbr) {
+  var guard = 0;
+  while (roster(abbr).length > ROSTER_MAX && guard++ < 100) {
+    var ros = roster(abbr);
+    var scored = ros.map(function (p) {
+      var cnt = ros.filter(function (q) { return q.pos === p.pos && q.ovr > p.ovr; }).length;
+      var surplus = cnt - depthTarget(p.pos) + 1;
+      var pv = releasePreview(p, false);
+      return { p: p, s: p.ovr - Math.max(0, surplus) * 6 + pv.now / 1000 * 1.5 + (p.age <= 23 ? 4 : 0), ok: space(abbr) + pv.savings >= 0 };
+    }).filter(function (x) { return x.ok; }).sort(byKey(function (x) { return x.s; }));
+    if (!scored.length) break;
+    release(scored[0].p, false);
+  }
+}
+
+var FIRST = ['James', 'Marcus', 'Tyler', 'Jalen', 'Darius', 'Caleb', 'Malik', 'Jordan', 'Isaiah', 'Trey', 'Devin', 'Cole', 'Brandon', 'Xavier', 'Elijah', 'Noah', 'Mason', 'Logan', 'Jaylen', 'Andre', 'Cam', 'Dante', 'Grant', 'Hunter', 'Kobe', 'Luke', 'Micah', 'Nate', 'Omar', 'Quinn', 'Reggie', 'Shane', 'Tre', 'Wes', 'Zach', 'Bryce', 'Carter', 'DeShawn', 'Emeka', 'Finn', 'Gabe', 'Jace', 'Keenan', 'Lamar', 'Myles', 'Nico', 'Rashad', 'Sam', 'Tavon', 'Victor', 'Ty', 'Aiden', 'Beau', 'Corey', 'Drew', 'Evan', 'Isaac', 'Jake', 'Kyle', 'Miles'];
+var LAST = ['Walker', 'Brooks', 'Hayes', 'Coleman', 'Bennett', 'Reed', 'Foster', 'Price', 'Jenkins', 'Barnes', 'Morris', 'Russell', 'Griffin', 'Hughes', 'Sanders', 'Patterson', 'Myers', 'Ford', 'Hamilton', 'Graham', 'Sullivan', 'Wallace', 'West', 'Cole', 'Owens', 'Harrison', 'Gibson', 'Ellis', 'Stephens', 'Tucker', 'Porter', 'Hunter', 'Hicks', 'Crawford', 'Boyd', 'Mason', 'Warren', 'Dixon', 'Ramos', 'Burns', 'Gordon', 'Shaw', 'Holmes', 'Rice', 'Robertson', 'Black', 'Daniels', 'Palmer', 'Mills', 'Nichols', 'Grant', 'Knight', 'Ferguson', 'Rose', 'Stone', 'Hawkins', 'Dunn', 'Perkins', 'Hudson', 'Spencer', 'Gardner', 'Stevens', 'Tran', 'Okafor', 'Adeyemi', 'Kowalski', 'Lindqvist', 'Moreau', 'Delgado', 'Fitzgerald'];
+function fakeName() { return RNG.pick(FIRST) + ' ' + RNG.pick(LAST); }
+function makeFiller(pos) {
+  var age = RNG.int(23, 28), ovr = RNG.int(44, 55);
+  var p = { id: 'G' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
+            exp: age - 22, draft: [0, 0, 0], apy: 0, signed: S.year, gtdTotal: 0, years: [], options: [], status: 'FA',
+            ovr: ovr, pot: ovr + RNG.int(0, 3), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
+  S.players.push(p); if (S._idx) S._idx[p.id] = p;
+  return p;
+}
+
+// The user's "auto roster" button: fill thin spots with minimum-salary players, then cut to 53.
+function userAutoRoster() {
+  aiFillRoster(ROSTER_MAX, [S.user]);
+  if (S.phase === 'preseason' || S.phase === 'season') cutdown(S.user);
+  autoDepth(S.user);
+}
+
+// Schedule, game sim from team strength, injuries, stats, standings, playoffs.
+var WEEKS = 17;
+
+function makeSchedule() {
+  // 17 rounds, each a perfect matching of all 32 teams: 6 division rounds + 11 non-division rounds.
+  var abbrs = TEAMS.map(function (t) { return t.abbr; });
+  var divs = {};
+  TEAMS.forEach(function (t) { (divs[t.conf + t.div] = divs[t.conf + t.div] || []).push(t.abbr); });
+  var rounds = [];
+  var rr = [[[0, 1], [2, 3]], [[0, 2], [1, 3]], [[0, 3], [1, 2]]];
+  for (var leg = 0; leg < 2; leg++) rr.forEach(function (pairs) {
+    var games = [];
+    Object.keys(divs).forEach(function (d) {
+      pairs.forEach(function (pr) {
+        var a = divs[d][pr[0]], b = divs[d][pr[1]];
+        games.push(leg ? { h: b, a: a } : { h: a, a: b });
+      });
+    });
+    rounds.push(games);
+  });
+  var met = {};
+  function key(a, b) { return a < b ? a + b : b + a; }
+  function sameDiv(a, b) { return TEAM[a].conf === TEAM[b].conf && TEAM[a].div === TEAM[b].div; }
+  var homeCount = {};
+  abbrs.forEach(function (a) { homeCount[a] = 3; });
+  for (var r = 0; r < 11; r++) {
+    for (var attempt = 0; attempt < 400; attempt++) {
+      var left = RNG.shuffle(abbrs.slice()), games = [], okRound = true;
+      while (left.length) {
+        var a = left.shift();
+        var idx = -1;
+        for (var j = 0; j < left.length; j++) if (!sameDiv(a, left[j]) && !met[key(a, left[j])]) { idx = j; break; }
+        if (idx < 0) { okRound = false; break; }
+        var b = left.splice(idx, 1)[0];
+        var home = homeCount[a] <= homeCount[b] ? a : b, away = home === a ? b : a;
+        games.push({ h: home, a: away });
+      }
+      if (okRound) {
+        games.forEach(function (g) { met[key(g.h, g.a)] = 1; homeCount[g.h]++; });
+        rounds.push(games);
+        break;
+      }
+    }
+  }
+  // interleave: spread division games across the season
+  var order = [6, 0, 7, 8, 1, 9, 10, 2, 11, 12, 13, 3, 14, 15, 4, 16, 5];
+  S.schedule = order.filter(function (i) { return rounds[i]; }).map(function (i) { return rounds[i].map(function (g) { return { h: g.h, a: g.a, hs: null, as: null }; }); });
+}
+
+function resetSeason() {
+  Object.keys(S.teams).forEach(function (a) { S.teams[a].rec = newRec(); });
+  S.players.forEach(function (p) { p.s = {}; });
+  S.week = 0; S.playoffs = null;
+  makeSchedule();
+}
+
+// ---------- one game ----------
+function simGame(home, away, neutral) {
+  var H = teamRating(home), A = teamRating(away);
+  var hfa = neutral ? 0 : 1.6;
+  var hExp = 22 + (H.off - A.def) * 0.55 + (H.st - A.st) * 0.05 + hfa / 2;
+  var aExp = 22 + (A.off - H.def) * 0.55 + (A.st - H.st) * 0.05 - hfa / 2;
+  var hs = Math.max(0, Math.round(hExp + RNG.normal() * 9.5));
+  var as = Math.max(0, Math.round(aExp + RNG.normal() * 9.5));
+  hs = footballScore(hs); as = footballScore(as);
+  if (hs === as) { // overtime
+    var r = RNG.next();
+    var pH = 0.5 + (H.ovr - A.ovr) * 0.01;
+    if (r < 0.06 && !neutral) {} else if (r < 0.06 + 0.94 * pH) hs += RNG.next() < 0.6 ? 3 : 6; else as += RNG.next() < 0.6 ? 3 : 6;
+  }
+  gameStats(home, hs, as); gameStats(away, as, hs);
+  injuries(home); injuries(away);
+  return { hs: hs, as: as };
+}
+function footballScore(x) { var bad = { 1: 0, 2: 3, 4: 3, 5: 6, 8: 7, 11: 10, 12: 13, 15: 14, 18: 17, 19: 20, 22: 21, 25: 24, 26: 27, 29: 28, 32: 31, 33: 34, 36: 35, 39: 38, 40: 41, 43: 42 }; return bad[x] != null ? bad[x] : x; }
+
+function add(p, k, v) { p.s[k] = (p.s[k] || 0) + v; }
+function gameStats(abbr, pts, ptsAgainst) {
+  var qb = starters(abbr, 'QB')[0], rb = starters(abbr, 'RB'), wr = starters(abbr, 'WR'), te = starters(abbr, 'TE'), k = starters(abbr, 'K')[0];
+  var lineup = [];
+  ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL', 'EDGE', 'DL', 'LB', 'CB', 'S', 'K', 'P'].forEach(function (pos) { lineup = lineup.concat(starters(abbr, pos)); });
+  lineup.forEach(function (p) { add(p, 'g', 1); });
+  var td = Math.max(0, Math.round(pts / 7.6 + RNG.normal() * 0.4));
+  var fg = Math.max(0, Math.round((pts - td * 7) / 3));
+  var passYds = Math.max(60, Math.round(205 + (qb ? (qb.ovr - 75) * 3 : -40) + (pts - 21) * 3 + RNG.normal() * 45));
+  var rushYds = Math.max(20, Math.round(110 + (pts - 21) * 1.5 + RNG.normal() * 30));
+  var passTd = Math.round(td * 0.62), rushTd = td - passTd;
+  if (qb) {
+    add(qb, 'pyd', passYds); add(qb, 'ptd', passTd);
+    add(qb, 'int', RNG.next() < 0.55 - (qb.ovr - 70) * 0.012 ? (RNG.next() < 0.25 ? 2 : 1) : 0);
+    add(qb, 'att', Math.round(passYds / 7.1));
+  }
+  var targets = [[wr[0], 0.27], [wr[1], 0.2], [te[0], 0.17], [wr[2], 0.12], [rb[0], 0.1]].filter(function (x) { return x[0]; });
+  var tw = sumBy(targets, function (x) { return x[1]; });
+  targets.forEach(function (x) {
+    var share = x[1] / tw * (0.85 + RNG.next() * 0.3);
+    add(x[0], 'rec', Math.round(passYds * share / 11.5)); add(x[0], 'ryd', Math.round(passYds * share));
+  });
+  for (var i = 0; i < passTd; i++) { var t = weighted(targets); if (t) add(t, 'rtd', 1); }
+  if (rb[0]) { add(rb[0], 'car', Math.round(rushYds * 0.7 / 4.4)); add(rb[0], 'ruyd', Math.round(rushYds * 0.7)); add(rb[0], 'rutd', rushTd); }
+  if (k) { add(k, 'fgm', fg); add(k, 'fga', fg + (RNG.next() < 0.3 ? 1 : 0)); }
+  // defense: sacks/ints/tackles
+  var rushers = starters(abbr, 'EDGE').map(function (p) { return [p, p.ovr / 30]; }).concat(starters(abbr, 'DL').map(function (p) { return [p, p.ovr / 60]; }));
+  var sacks = Math.max(0, Math.round(2.4 + RNG.normal() * 1.3));
+  for (var s = 0; s < sacks; s++) { var r = weighted(rushers); if (r) add(r, 'sk', 1); }
+  var dbs = starters(abbr, 'CB').concat(starters(abbr, 'S')).map(function (p) { return [p, 1]; });
+  var ints = RNG.next() < 0.6 ? RNG.int(1, 2) - (RNG.next() < 0.5 ? 1 : 0) : 0;
+  for (var n = 0; n < ints; n++) { var d = weighted(dbs); if (d) add(d, 'dint', 1); }
+  starters(abbr, 'LB').forEach(function (p) { add(p, 'tk', RNG.int(4, 10)); });
+  starters(abbr, 'S').forEach(function (p) { add(p, 'tk', RNG.int(3, 7)); });
+  starters(abbr, 'CB').forEach(function (p) { add(p, 'tk', RNG.int(2, 6)); });
+}
+function weighted(list) {
+  var tot = sumBy(list, function (x) { return x[1]; }), r = RNG.next() * tot;
+  for (var i = 0; i < list.length; i++) { r -= list[i][1]; if (r <= 0) return list[i][0]; }
+  return list.length ? list[list.length - 1][0] : null;
+}
+
+function injuries(abbr) {
+  roster(abbr).forEach(function (p) {
+    if (p.inj || !(p.s.g)) return;
+    var risk = 0.016 * (p.pos === 'RB' ? 1.5 : p.pos === 'K' || p.pos === 'P' || p.pos === 'LS' ? 0.2 : 1) * (p.age >= 31 ? 1.3 : 1);
+    if (starters(abbr, p.pos).indexOf(p) < 0) risk *= 0.3;
+    if (RNG.next() < risk) {
+      var r = RNG.next();
+      p.inj = r < 0.55 ? RNG.int(1, 2) : r < 0.85 ? RNG.int(3, 6) : r < 0.95 ? RNG.int(7, 10) : 99;
+      p.injNote = p.inj === 99 ? 'Out for season' : 'Out ' + p.inj + ' wk';
+      if (abbr === S.user || p.ovr >= 85) news(p.pos + ' ' + p.name + ' (' + abbr + ') injured: ' + (p.inj === 99 ? 'out for the season' : 'out ' + p.inj + ' week' + (p.inj > 1 ? 's' : '')) + '.', abbr);
+    }
+  });
+}
+function healInjuries() { S.players.forEach(function (p) { if (p.inj && p.inj < 99) { p.inj--; if (!p.inj) p.injNote = null; } }); }
+
+function record(home, away, hs, as) {
+  var H = S.teams[home].rec, A = S.teams[away].rec;
+  H.pf += hs; H.pa += as; A.pf += as; A.pa += hs;
+  var sd = TEAM[home].div === TEAM[away].div && TEAM[home].conf === TEAM[away].conf, sc = TEAM[home].conf === TEAM[away].conf;
+  if (hs > as) { H.w++; A.l++; if (sd) { H.dw++; A.dl++; } if (sc) { H.cw++; A.cl++; } }
+  else if (as > hs) { A.w++; H.l++; if (sd) { A.dw++; H.dl++; } if (sc) { A.cw++; H.cl++; } }
+  else { H.t++; A.t++; }
+}
+
+function simWeek() {
+  if (S.week >= WEEKS) return false;
+  // options due this league year are exercised once games start
+  if (S.week === 0) S.players.forEach(function (p) { if (p.team) Cap.exerciseOptions(p, S.year); });
+  Object.keys(S.teams).forEach(function (a) { if (a !== S.user) autoDepth(a); });
+  S.schedule[S.week].forEach(function (g) {
+    var r = simGame(g.h, g.a);
+    g.hs = r.hs; g.as = r.as;
+    record(g.h, g.a, r.hs, r.as);
+  });
+  healInjuries();
+  S.week++;
+  return true;
+}
+
+// ---------- standings ----------
+function pct(r) { var g = r.w + r.l + r.t; return g ? (r.w + r.t / 2) / g : 0; }
+function standingSort(a, b) {
+  var ra = S.teams[a].rec, rb = S.teams[b].rec;
+  return (pct(rb) - pct(ra)) || ((rb.dw - rb.dl) - (ra.dw - ra.dl)) * 0 || ((rb.cw - rb.cl) - (ra.cw - ra.cl)) || ((rb.pf - rb.pa) - (ra.pf - ra.pa)) || (a < b ? -1 : 1);
+}
+function divisionStandings() {
+  var out = [];
+  ['AFC', 'NFC'].forEach(function (c) {
+    ['East', 'North', 'South', 'West'].forEach(function (d) {
+      out.push({ conf: c, div: d, teams: TEAMS.filter(function (t) { return t.conf === c && t.div === d; }).map(function (t) { return t.abbr; }).sort(standingSort) });
+    });
+  });
+  return out;
+}
+function seeds(conf) {
+  var divs = divisionStandings().filter(function (d) { return d.conf === conf; });
+  var winners = divs.map(function (d) { return d.teams[0]; }).sort(standingSort);
+  var rest = TEAMS.filter(function (t) { return t.conf === conf && winners.indexOf(t.abbr) < 0; }).map(function (t) { return t.abbr; }).sort(standingSort);
+  return winners.concat(rest.slice(0, 3));
+}
+
+// ---------- playoffs ----------
+function startPlayoffs() {
+  S.playoffs = { round: 0, AFC: seeds('AFC'), NFC: seeds('NFC'), games: [], alive: {}, champ: null, elim: {} };
+  ['AFC', 'NFC'].forEach(function (c) { S.playoffs[c].forEach(function (a) { S.playoffs.alive[a] = true; }); });
+}
+var ROUND_NAMES = ['Wild card', 'Divisional', 'Conference championship', 'Super Bowl'];
+function simPlayoffRound() {
+  var po = S.playoffs; if (!po || po.champ) return false;
+  var games = [];
+  if (po.round < 3) {
+    ['AFC', 'NFC'].forEach(function (c) {
+      var alive = po[c].filter(function (a) { return po.alive[a]; });
+      var list = po.round === 0 ? alive.slice(1) : alive;   // #1 seed has a bye in the wild-card round
+      for (var i = 0; i < list.length / 2; i++) games.push({ h: list[i], a: list[list.length - 1 - i], conf: c });
+    });
+  } else {
+    var a = po.AFC.filter(function (x) { return po.alive[x]; })[0], n = po.NFC.filter(function (x) { return po.alive[x]; })[0];
+    games.push({ h: a, a: n, neutral: true });
+  }
+  games.forEach(function (g) {
+    var r = simGame(g.h, g.a, g.neutral);
+    if (r.hs === r.as) r.hs += 3;
+    g.hs = r.hs; g.as = r.as; g.round = po.round;
+    var loser = r.hs > r.as ? g.a : g.h;
+    po.alive[loser] = false; po.elim[loser] = po.round;
+    po.games.push(g);
+  });
+  healInjuries();
+  if (po.round === 3) {
+    var last = po.games[po.games.length - 1];
+    po.champ = last.hs > last.as ? last.h : last.a;
+    news(TEAM[po.champ].name + ' win the Super Bowl (' + Math.max(last.hs, last.as) + '-' + Math.min(last.hs, last.as) + ').');
+  }
+  po.round++;
+  return true;
+}
+
+// Phase machine, draft, progression, retirements, contract rollover.
+
+function canAdvance() {
+  if (S.phase === 'preseason' && roster(S.user).length > ROSTER_MAX) return 'Cut your roster to ' + ROSTER_MAX + ' first (you have ' + roster(S.user).length + '), or use auto cut.';
+  if (S.phase === 'preseason' && roster(S.user).length < 46) return 'You need at least 46 players to start the season (you have ' + roster(S.user).length + '). Sign free agents.';
+  if (S.phase === 'draft' && S.draft && S.draft.i < S.draft.order.length) return 'Finish the draft first.';
+  if (S.phase === 'fa' && space(S.user) < 0) return 'You are over the cap. Clear space before moving on.';
+  return null;
+}
+
+function advance() {
+  var block = canAdvance();
+  if (block) return { ok: false, msg: block };
+  switch (S.phase) {
+    case 'resign':
+      aiResign();
+      S.phase = 'fa'; S.faDay = 0;
+      news('Free agency is open. ' + freeAgents().filter(function (p) { return p.ovr >= 75; }).length + ' players rated 75+ are available.');
+      break;
+    case 'fa':
+      if (S.faDay < FA_DAYS) { aiFreeAgencyDay(); S.faDay++; if (S.faDay < FA_DAYS) break; }
+      startDraft(); S.phase = 'draft';
+      break;
+    case 'draft':
+      finishDraft(); S.phase = 'preseason';
+      aiFillRoster(ROSTER_MAX);
+      aiTeams().forEach(function (a) { cutdown(a); autoDepth(a); });
+      news('Preseason: get to ' + ROSTER_MAX + ' players before week 1.');
+      break;
+    case 'preseason':
+      aiFreeAgencyDay(); aiExtensions();
+      aiFillRoster(ROSTER_MAX);
+      aiTeams().forEach(function (a) { cutdown(a); });
+      aiPrepay(15000);
+      S.week1Space = sumBy(aiTeams().filter(function (a) { return a !== S.user; }), function (a) { return space(a); }) / 31;
+      resetSeason(); S.phase = 'season';
+      break;
+    case 'season':
+      if (S.week < WEEKS) { simWeek(); aiInSeason(); break; }
+      startPlayoffs(); S.phase = 'playoffs';
+      news('Playoff field set. AFC: ' + S.playoffs.AFC.join(', ') + '. NFC: ' + S.playoffs.NFC.join(', ') + '.');
+      break;
+    case 'playoffs':
+      if (!S.playoffs.champ) { simPlayoffRound(); break; }
+      endOfYear();
+      break;
+  }
+  return { ok: true };
+}
+
+// in-season: AI teams replace injured starters with free agents now and then
+function aiInSeason() {
+  aiTeams().forEach(function (abbr) {
+    POSITIONS.forEach(function (pos) {
+      if (starters(abbr, pos).length < Market.STARTERS[pos] && roster(abbr).length < ROSTER_MAX + 1) {
+        var fa = freeAgents().filter(function (p) { return p.pos === pos; }).sort(byKey(function (p) { return p.ovr; }, true))[0];
+        if (fa && roster(abbr).length >= ROSTER_MAX) cutdownOne(abbr, pos);
+        if (fa) sign(fa, abbr, { years: 1, total: Cap.minSalary(fa.exp, S.year) + 100, bonus: 0, gtd: 0 }, true);
+      }
+    });
+  });
+}
+function cutdownOne(abbr, avoidPos) {
+  var c = roster(abbr).filter(function (p) { return p.pos !== avoidPos && !p.inj; }).sort(byKey(function (p) { return p.ovr + releasePreview(p).now / 1000; }))[0];
+  if (c && space(abbr) + releasePreview(c).savings >= 0) release(c, false);
+}
+
+// ---------- draft ----------
+var CLASS_POS = { QB: 12, RB: 22, WR: 40, TE: 18, OT: 26, IOL: 28, EDGE: 34, DL: 30, LB: 26, CB: 36, S: 22, K: 3, P: 3, LS: 2 };
+function genDraftClass(year) {
+  var list = [];
+  Object.keys(CLASS_POS).forEach(function (pos) { for (var i = 0; i < CLASS_POS[pos]; i++) list.push(pos); });
+  var out = list.map(function (pos) {
+    var z = RNG.normal();
+    var g = clamp(z, -2.5, 3.2);
+    var age = RNG.int(21, 23);
+    var ovr = clamp(Math.round(54 + g * 7 + RNG.normal() * 2), 40, 84);
+    var pot = clamp(Math.round(ovr + 8 + RNG.next() * 14 + Math.max(0, g) * 3), ovr, 99);
+    var p = { id: 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
+              exp: 0, draft: [year, 0, 0], apy: 0, signed: year, gtdTotal: 0, years: [], options: [], status: 'Prospect',
+              ovr: ovr, pot: pot, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
+              college: RNG.pick(['Alabama', 'Georgia', 'Ohio State', 'Michigan', 'LSU', 'Texas', 'Oregon', 'USC', 'Clemson', 'Penn State', 'Florida', 'Notre Dame', 'Miami', 'Utah', 'Iowa', 'Wisconsin', 'Tennessee', 'Washington', 'Oklahoma', 'Auburn', 'Boise State', 'Toledo', 'App State', 'Tulane', 'Missouri', 'Kansas State']) };
+    p.grade = prospectGrade(p);
+    return p;
+  });
+  out.sort(byKey(function (p) { return p.grade; }, true));
+  return out;
+}
+function prospectGrade(p) { return (p.ovr * 0.55 + p.pot * 0.45) * (0.9 + Market.POS_WEIGHT[p.pos] * 0.05); }
+
+function draftOrderTeams() {
+  if (S.lastOrder) return S.lastOrder.slice();
+  // first draft of the franchise: 2026 season not finished in the data, so use projected team strength
+  return TEAMS.map(function (t) { return t.abbr; }).sort(byKey(function (a) { return teamRating(a).ovr + RNG.next() * 2; }));
+}
+function startDraft() {
+  var order = draftOrderTeams();
+  var picks = S.picks.filter(function (k) { return k.year === S.year; });
+  picks.sort(function (a, b) { return a.round - b.round || order.indexOf(a.orig) - order.indexOf(b.orig); });
+  picks.forEach(function (k, i) { k.no = i + 1; });
+  // number next year's picks as "projected" by round only
+  var cls = genDraftClass(S.year);
+  cls.forEach(function (p) { S.players.push(p); if (S._idx) S._idx[p.id] = p; });
+  S.draft = { order: picks.map(function (k) { return k.id; }), i: 0, made: [] };
+  news('The ' + S.year + ' draft is on. ' + (picks.filter(function (k) { return k.owner === S.user; }).length) + ' picks for ' + S.user + '.');
+}
+function draftPool() { return S.players.filter(function (p) { return p.prospect && !p.team; }).sort(byKey(function (p) { return p.grade; }, true)); }
+function currentPick() { return S.draft && S.draft.i < S.draft.order.length ? S.picks.filter(function (k) { return k.id === S.draft.order[S.draft.i]; })[0] : null; }
+function makePick(k, p) {
+  var deal = Cap.rookieDeal(k.no, S.year, capOf(S.year));
+  p.prospect = false; p.draft = [S.year, k.round, k.no]; p.status = 'ACT';
+  p.team = null;
+  var yrs = Cap.buildContract(deal, S.year, 0);
+  p.team = k.owner; p.years = yrs; p.apy = Cap.apy(yrs); p.gtdTotal = deal.gtd; p.signed = S.year;
+  S.draft.made.push({ no: k.no, round: k.round, team: k.owner, id: p.id });
+  S.draft.i++;
+  if (k.owner === S.user || k.round === 1) news('Pick ' + k.no + ': ' + k.owner + ' select ' + p.pos + ' ' + p.name + ' (' + p.college + ').', k.owner);
+}
+function aiPick(k) {
+  var pool = draftPool().slice(0, 40);
+  var best = null, bs = -1;
+  pool.forEach(function (p, i) {
+    var lift = needAt(k.owner, p.pos, p.pot - 6);
+    var s = p.grade + Math.min(8, lift * 0.25) * Market.POS_WEIGHT[p.pos] - i * 0.15 + RNG.next() * 2;
+    if (p.pos === 'K' || p.pos === 'P' || p.pos === 'LS') s -= k.round < 5 ? 25 : 0;
+    if (s > bs) { bs = s; best = p; }
+  });
+  makePick(k, best);
+}
+// Advance the draft until it's the user's pick (or it ends). Returns true if the user is on the clock.
+function draftUntilUser(includeUser) {
+  while (S.draft.i < S.draft.order.length) {
+    var k = currentPick();
+    if (k.owner === S.user && !includeUser) return true;
+    if (k.owner === S.user) { aiPick(k); continue; }
+    aiPick(k);
+  }
+  return false;
+}
+function finishDraft() {
+  if (!S.draft) return;
+  draftUntilUser(true);
+  // undrafted prospects become free agents asking for the minimum
+  S.players.forEach(function (p) { if (p.prospect) { p.prospect = false; p.status = 'UDFA'; p.ovr = Math.min(p.ovr, 62); } });
+  S.picks = S.picks.filter(function (k) { return k.year !== S.year; });
+  addPicks(S.year + 3);
+  TEAMS.forEach(function (t) { autoDepth(t.abbr); });
+}
+
+// ---------- end of year ----------
+function progress(p) {
+  var pk = Market.PEAK[p.pos] || [25, 30];
+  var d;
+  if (p.age < pk[0]) d = Math.min(5, Math.max(-1, (p.pot - p.ovr) * (0.12 + RNG.next() * 0.2) + RNG.normal() * 1.5));
+  else if (p.age <= pk[1]) d = RNG.normal() * 2.2 + 0.3;
+  else d = -(1.5 + (p.age - pk[1]) * 1.1) + RNG.normal() * 2;
+  p.ovr = clamp(Math.round(p.ovr + d), 30, 99);
+  p.pot = Math.max(p.ovr, Math.round(p.pot - (p.age >= pk[0] ? 2 : RNG.next() * 2)));
+  p.age++; p.exp++;
+}
+function retires(p) {
+  var pk = (Market.PEAK[p.pos] || [25, 30])[1];
+  var over = p.age - pk;
+  var prob = over <= 0 ? 0.005 : Math.min(0.95, 0.06 * over + (p.ovr < 65 ? 0.2 : 0) + (p.age >= 36 ? 0.3 : 0));
+  if (!p.team && p.age >= 30) prob += 0.25;          // unsigned vets often hang it up
+  if (p.ovr >= 88 && p.age <= 38) prob *= 0.4;
+  return RNG.next() < prob;
+}
+
+function endOfYear() {
+  var po = S.playoffs, Y = S.year;
+  var ur = S.teams[S.user].rec;
+  S.history.push({ year: Y, champ: po.champ, user: S.user, rec: ur.w + '-' + ur.l + (ur.t ? '-' + ur.t : ''),
+                   userFinish: po.champ === S.user ? 'Won Super Bowl' : po.elim[S.user] != null ? 'Lost in ' + ROUND_NAMES[po.elim[S.user]].toLowerCase() : 'Missed playoffs',
+                   mvp: seasonMvp() });
+  // next draft order: non-playoff teams by record, then playoff teams by round lost, champ last
+  var all = TEAMS.map(function (t) { return t.abbr; });
+  all.sort(function (a, b) {
+    var ea = po.champ === a ? 9 : po.elim[a] != null ? po.elim[a] + 1 : 0, eb = po.champ === b ? 9 : po.elim[b] != null ? po.elim[b] + 1 : 0;
+    return ea - eb || (pct(S.teams[a].rec) - pct(S.teams[b].rec)) || ((S.teams[a].rec.pf - S.teams[a].rec.pa) - (S.teams[b].rec.pf - S.teams[b].rec.pa));
+  });
+  S.lastOrder = all;
+  // career stats
+  S.players.forEach(function (p) { Object.keys(p.s || {}).forEach(function (k) { p.car[k] = (p.car[k] || 0) + p.s[k]; }); p.last = p.s; });
+  // market inflation: if teams sat on lots of unused room this year, next year's asking prices rise
+  if (S.week1Space != null) {
+    var slack = S.week1Space / capOf(Y) - 0.03;
+    // look ahead too: money already free next year (expiring deals) beyond a normal ~30% of the cap
+    var ai = aiTeams().filter(function (a) { return a !== S.user; });
+    var nextFree = sumBy(ai, function (a) { return space(a, Y + 1) + Cap.teamCommitted(S.players, T(a), Y) * 0; }) / ai.length + (sumBy(ai, function (a) { return Math.max(0, space(a, Y)); }) / ai.length);
+    slack = Math.max(slack, (nextFree / capOf(Y + 1) - 0.33) * 0.55);
+    var unsigned = freeAgents().filter(function (p) { return p.ovr >= 80; }).length;
+    if (unsigned > 8) slack = Math.min(slack, -0.06 * Math.min(3, unsigned / 8));
+    S.payScale = clamp(S.payScale * (1 + clamp(slack * 1.5, -0.06, 0.22)), 0.6, 2.5);
+    Market.setScale(S.payScale);
+  }
+  // cap rollover into next league year
+  TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
+  var retired = [];
+  S.players.forEach(function (p) {
+    if (p.retired) return;
+    if (retires(p)) {
+      if (p.team) { var c = Cap.releaseCost(p, Y + 1, false); Cap.applyDead(T(p.team), c.dead); }
+      p.retired = Y; p.retiredFrom = p.team; p.team = null; p.years = []; p.options = [];
+      retired.push(p);
+      return;
+    }
+    progress(p);
+    p.inj = 0; p.injNote = null; p.rej = 0;
+  });
+  normalizeRatings();
+  if (retired.length) news(retired.length + ' players retired, including ' + retired.sort(byKey(function (p) { return p.ovr; }, true)).slice(0, 4).map(function (p) { return p.name; }).join(', ') + '.');
+  // keep the save small: unsigned veterans who sat out a year retire; drop retired non-notables
+  S.players.forEach(function (p) {
+    if (!p.team && !p.retired && !p.rights && (p.ovr < 58 || p.age >= 32 || (p.gen && p.ovr < 62))) { p.retired = Y; p.retiredFrom = null; }
+  });
+  S.players = S.players.filter(function (p) { return !p.retired || (p.ovr >= 85 && !p.gen); });
+  S.players.forEach(function (p) { if (p.retired) { p.years = []; p.s = {}; p.sub = {}; } });
+  S.year = Y + 1;
+  // contracts: expired deals -> pending free agents with re-sign rights; void years accelerate
+  S.players.forEach(function (p) {
+    if (!p.team) return;
+    var acc = Cap.voidAcceleration(p, S.year);
+    if (acc) Cap.applyDead(T(p.team), (function () { var d = {}; d[S.year] = acc; return d; })());
+    if (Cap.yearsLeft(p, S.year) === 0) { p.rights = p.team; p.prevTeam = p.team; p.team = null; p.years = []; p.options = []; }
+  });
+  S.june1 = {};
+  TEAMS.forEach(function (t) { T(t.abbr); autoDepth(t.abbr); S.teams[t.abbr].rec = newRec(); });
+  S.phase = 'resign'; S.week = 0; S.playoffs = null; S.draft = null; S.schedule = [];
+  reindex();
+  var exp = S.players.filter(function (p) { return p.rights === S.user; }).length;
+  news('The ' + S.year + ' league year begins. ' + exp + ' of your players have expiring contracts. Cap: ' + fmtM(capOf(S.year)) + ' (projected) plus ' + fmtM(S.teams[S.user].rollover[S.year] || 0) + ' rollover.');
+}
+// Market clearing for the new league year: compare the money teams have free with the fair value of
+// everyone who needs a contract (expired deals + free agents good enough to roster), and move the
+// league pay level toward the price that spends it.
+function clearMarket() {
+  var y = S.year;
+  var free = sumBy(TEAMS, function (t) { return Math.max(0, space(t.abbr, y)); });
+  var rostered = S.players.filter(function (p) { return p.team; }).length;
+  var openSlots = Math.max(0, 53 * 32 - rostered - 224);          // minus incoming draft class
+  var pool = S.players.filter(function (p) { return !p.team && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr; }, true)).slice(0, openSlots);
+  var fair = sumBy(pool, function (p) { return Market.valueAt(p.pos, p.ovr, marketCap(), p.exp, y); });
+  var rookies = 32 * 12000 * capOf(y) / capOf(BASE.startYear);
+  var avail = free - rookies - 32 * 6000;                          // teams keep a little room
+  if (fair <= 0 || avail <= 0) return;
+  var ratio = clamp(avail / fair, 0.85, 1.2);
+  S.payScale = clamp(S.payScale * Math.pow(ratio, 0.7), 0.7, 2.2);
+  Market.setScale(S.payScale);
+}
+
+// Map each position's ratings back onto the starting distribution (rank order preserved).
+function normalizeRatings() {
+  POSITIONS.forEach(function (pos) {
+    var ref = S.dist[pos]; if (!ref || !ref.length) return;
+    var list = S.players.filter(function (p) { return p.pos === pos && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr + p.pot * 0.001; }, true));
+    list.forEach(function (p, i) {
+      // top-anchored: the i-th best player gets the i-th best starting rating, so the number of
+      // good players per position stays constant even as the pool of fringe players changes size
+      var target = i < ref.length ? ref[i] : ref[ref.length - 1] - Math.min(8, (i - ref.length) * 0.05);
+      var d = target - p.ovr;
+      p.ovr = clamp(target, 30, 99); p.pot = clamp(Math.max(p.ovr, p.pot + d), 30, 99);
+    });
+  });
+}
+function seasonMvp() {
+  var best = null, bs = -1;
+  S.players.forEach(function (p) {
+    if (!p.s || !p.s.g) return;
+    var v = p.pos === 'QB' ? ((p.s.pyd || 0) / 20 + (p.s.ptd || 0) * 5 - (p.s.int || 0) * 3) * 1.3 : (p.s.ruyd || 0) / 10 + (p.s.ryd || 0) / 10 + ((p.s.rutd || 0) + (p.s.rtd || 0)) * 6 + (p.s.sk || 0) * 8;
+    v *= (0.6 + pct(S.teams[p.team] ? S.teams[p.team].rec : newRec()));
+    if (v > bs) { bs = v; best = p; }
+  });
+  return best ? best.pos + ' ' + best.name + ' (' + best.team + ')' : '';
+}
+
+// Screens and interaction. Rendering is plain template strings; events are delegated via data-act.
+var UI = { view: 'hub', posFilter: 'ALL', sort: 'ovr', faPos: 'ALL', trade: null, modal: null, draftPos: 'ALL', leaders: 'pyd', msg: null };
+var $app = function () { return document.getElementById('app'); };
+
+function setView(v) { UI.view = v; UI.msg = null; render(); window.scrollTo(0, 0); }
+function flash(msg, bad) { UI.msg = { text: msg, bad: !!bad }; }
+
+// ---------- formatting ----------
+function ovrPill(o) { var c = o >= 85 ? 'g' : o >= 70 ? 'n' : 'w'; return '<span class="ovr ' + c + '">' + o + '</span>'; }
+function capLabel() { return fmtM(capOf(S.year)) + ' cap (projected)'; }
+function teamLink(a) { return chip(a) + '<b>' + a + '</b>'; }
+function recStr(r) { return r.w + '-' + r.l + (r.t ? '-' + r.t : ''); }
+function yrsLeftStr(p) { var n = Cap.yearsLeft(p, S.year); return n ? n + ' yr' : '—'; }
+function statusStr(p) { return p.inj ? '<span class="bad">' + esc(p.injNote || 'Injured') + '</span>' : ''; }
+
+// ---------- top-level ----------
+function render() {
+  if (!S) return renderStart();
+  var t = TEAM[S.user], r = teamRating(S.user), sp = space(S.user);
+  var nav = [['hub', 'Hub'], ['roster', 'Roster'], ['depth', 'Depth chart'], ['cap', 'Cap'], ['trade', 'Trade'], ['fa', S.phase === 'resign' ? 'Re-sign' : 'Free agents']];
+  if (S.phase === 'draft') nav.push(['draft', 'Draft']);
+  nav = nav.concat([['schedule', 'Schedule'], ['standings', 'Standings'], ['leaders', 'Leaders'], ['news', 'News'], ['history', 'History']]);
+  var html = '<header class="top"><div class="brand">' + chip(S.user) + '<span class="tname">' + esc(t.name) + '</span>' +
+    '<span class="muted">' + S.year + ' · ' + PHASE_LABEL[S.phase] + phaseDetail() + '</span></div>' +
+    '<div class="topstats"><span>OVR <b>' + r.ovr + '</b></span><span>Cap space <b class="' + (sp < 0 ? 'bad' : '') + '">' + fmtM(sp) + '</b> <span class="muted">approx.</span></span>' +
+    '<span>Roster <b>' + roster(S.user).length + '/' + rosterMax() + '</b></span></div>' + advanceButtons() + '</header>' +
+    '<nav class="nav">' + nav.map(function (n) { return '<button class="' + (UI.view === n[0] ? 'on' : '') + '" data-act="view" data-v="' + n[0] + '">' + n[1] + '</button>'; }).join('') + '</nav>';
+  if (UI.msg) html += '<div class="msg ' + (UI.msg.bad ? 'bad' : '') + '">' + esc(UI.msg.text) + '</div>';
+  html += '<main>' + (VIEWS[UI.view] || VIEWS.hub)() + '</main>';
+  if (UI.modal) html += '<div class="overlay" data-act="close-bg"><div class="modal">' + UI.modal() + '</div></div>';
+  $app().innerHTML = html;
+  scheduleSave();
+}
+function phaseDetail() {
+  if (S.phase === 'fa') return ' · day ' + (S.faDay + 1) + ' of ' + FA_DAYS;
+  if (S.phase === 'season') return ' · week ' + (S.week + 1 > WEEKS ? WEEKS : S.week + 1);
+  if (S.phase === 'playoffs' && S.playoffs) return S.playoffs.champ ? ' · complete' : ' · ' + ROUND_NAMES[S.playoffs.round];
+  return '';
+}
+function advanceButtons() {
+  var label = { resign: 'Open free agency', fa: S.faDay < FA_DAYS - 1 ? 'Next FA day' : 'Go to draft', draft: 'Finish draft',
+                preseason: 'Start season', season: S.week < WEEKS ? 'Sim week ' + (S.week + 1) : 'Start playoffs',
+                playoffs: S.playoffs && S.playoffs.champ ? 'Start ' + (S.year + 1) + ' offseason' : 'Sim ' + (S.playoffs ? ROUND_NAMES[S.playoffs.round].toLowerCase() : 'playoffs') }[S.phase];
+  var extra = '';
+  if (S.phase === 'season' && S.week < WEEKS) extra = '<button data-act="sim-season">Sim to playoffs</button>';
+  if (S.phase === 'playoffs' && S.playoffs && !S.playoffs.champ) extra = '<button data-act="sim-playoffs">Sim all playoffs</button>';
+  if (S.phase === 'fa') extra = '<button data-act="skip-fa">Skip to draft</button>';
+  if (S.phase === 'preseason') extra = '<button data-act="auto-roster">Auto-fill and cut to ' + ROSTER_MAX + '</button>';
+  return '<div class="adv">' + extra + '<button class="primary" data-act="advance">' + label + ' ›</button></div>';
+}
+
+function renderStart() {
+  var has = hasSave();
+  $app().innerHTML = '<div class="start"><h1>NFL GM</h1><p class="muted">Real rosters and contracts (OverTheCap via nflverse). Ratings are derived from 2025–26 stats and snaps. Start in the ' + (window.DATA ? DATA.meta.startYear : 2027) + ' offseason.</p>' +
+    (has ? '<p><button class="primary" data-act="continue">Continue saved game</button></p>' : '') +
+    '<h2>Pick a team</h2><div class="teamgrid">' + TEAMS.slice().sort(byKey(function (t) { return t.name; })).map(function (t) {
+      return '<button class="teambtn' + (t.abbr === 'NE' ? ' pick' : '') + '" data-act="new" data-t="' + t.abbr + '">' + chip(t.abbr) + '<b>' + t.abbr + '</b><span>' + esc(t.name) + '</span></button>';
+    }).join('') + '</div>' + (has ? '<p class="muted small">Starting a new game replaces your saved game.</p>' : '') + '</div>';
+}
+
+// ---------- views ----------
+var VIEWS = {};
+
+VIEWS.hub = function () {
+  var r = teamRating(S.user), rec = S.teams[S.user].rec, needs = teamNeeds(S.user).slice(0, 4);
+  var exp = S.players.filter(function (p) { return p.rights === S.user && !p.team; });
+  var lastYear = roster(S.user).filter(function (p) { return Cap.yearsLeft(p, S.year) === 1; });
+  var nextGame = S.phase === 'season' && S.week < WEEKS ? S.schedule[S.week].filter(function (g) { return g.h === S.user || g.a === S.user; })[0] : null;
+  var h = '<div class="grid4">' +
+    metric('Team OVR', r.ovr, 'Off ' + r.off + ' · Def ' + r.def) +
+    metric('Cap space', fmtM(space(S.user)), 'approx. · ' + capLabel()) +
+    metric('Record', recStr(rec), S.phase === 'season' || S.phase === 'playoffs' ? divRank() : 'Season not started') +
+    metric('Dead money', fmtM(Cap.teamDead(T(S.user), S.year)), S.year + ' cap') + '</div>';
+  h += '<div class="grid2">';
+  h += '<section class="card"><h3>To do</h3><ul class="todo">' + todo(exp, lastYear, nextGame).join('') + '</ul></section>';
+  h += '<section class="card"><h3>Needs</h3>' + (needs.length ? needs.map(function (n) {
+    var st = starters(S.user, n.pos); return '<div class="row"><b>' + n.pos + '</b><span class="muted">' + (st.length ? 'starters ' + st.map(function (p) { return p.ovr; }).join(', ') : 'no starter') + '</span></div>';
+  }).join('') : '<p class="muted">No glaring holes.</p>') + '</section></div>';
+  h += '<section class="card"><h3>Team news</h3>' + newsList(S.news.filter(function (n) { return !n.team || n.team === S.user; }).slice(0, 8)) + '</section>';
+  return h;
+};
+function divRank() {
+  var d = divisionStandings().filter(function (d) { return d.teams.indexOf(S.user) >= 0; })[0];
+  var i = d.teams.indexOf(S.user) + 1;
+  return ['1st', '2nd', '3rd', '4th'][i - 1] + ' in ' + TEAM[S.user].conf + ' ' + d.div;
+}
+function todo(exp, lastYear, nextGame) {
+  var out = [];
+  if (S.phase === 'resign') out.push('<li>' + exp.length + ' expiring players can be re-signed before free agency. <button class="link" data-act="view" data-v="fa">Review</button></li>');
+  if (S.phase === 'fa') out.push('<li>Free agency day ' + (S.faDay + 1) + ': other teams sign players each day. <button class="link" data-act="view" data-v="fa">Browse free agents</button></li>');
+  if (S.phase === 'draft') out.push('<li>The draft is on. <button class="link" data-act="view" data-v="draft">Go to the draft board</button></li>');
+  if (S.phase === 'preseason') out.push('<li>Get to ' + ROSTER_MAX + ' players (now ' + roster(S.user).length + '). <button class="link" data-act="auto-roster">Auto-fill and cut</button></li>');
+  if (nextGame) out.push('<li>Week ' + (S.week + 1) + ': ' + (nextGame.h === S.user ? 'vs ' : 'at ') + teamLink(nextGame.h === S.user ? nextGame.a : nextGame.h) + ' (' + teamRating(nextGame.h === S.user ? nextGame.a : nextGame.h).ovr + ' OVR)</li>');
+  if (lastYear.length && S.phase !== 'playoffs') out.push('<li>' + lastYear.length + ' players are in the last year of their deal: ' + lastYear.sort(byKey(function (p) { return p.ovr; }, true)).slice(0, 4).map(function (p) { return '<button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button>'; }).join(', ') + '</li>');
+  if (space(S.user) < 0) out.push('<li class="bad">You are over the cap. Release, trade or restructure players.</li>');
+  return out;
+}
+function metric(label, val, sub) { return '<div class="metric"><p>' + label + '</p><b>' + val + '</b><span>' + sub + '</span></div>'; }
+function newsList(items) { return items.length ? '<ul class="news">' + items.map(function (n) { return '<li><span class="muted">' + n.y + ' ' + PHASE_LABEL[n.ph].toLowerCase() + (n.ph === 'season' ? ' wk ' + n.w : '') + '</span> ' + esc(n.msg) + '</li>'; }).join('') + '</ul>' : '<p class="muted">Nothing yet.</p>'; }
+
+VIEWS.roster = function () {
+  var ros = roster(S.user);
+  if (UI.posFilter !== 'ALL') ros = ros.filter(function (p) { return p.pos === UI.posFilter; });
+  var sorts = { ovr: function (p) { return -p.ovr; }, cap: function (p) { return -Cap.capHit(p, S.year); }, pos: function (p) { return POSITIONS.indexOf(p.pos) * 100 - p.ovr; }, age: function (p) { return p.age; } };
+  ros.sort(byKey(sorts[UI.sort]));
+  var h = filterBar('posFilter') + '<div class="sortbar">Sort: ' + ['ovr', 'pos', 'cap', 'age'].map(function (s) { return '<button class="' + (UI.sort === s ? 'on' : '') + '" data-act="sort" data-s="' + s + '">' + { ovr: 'Rating', pos: 'Position', cap: 'Cap hit', age: 'Age' }[s] + '</button>'; }).join('') + '</div>';
+  h += '<div class="tablewrap"><table><thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>OVR</th><th>POT</th><th class="r">' + S.year + ' cap hit</th><th class="r">Left</th><th class="r">Gtd left</th><th class="r">Dead if cut</th><th></th></tr></thead><tbody>';
+  ros.forEach(function (p) {
+    var pv = releasePreview(p, false);
+    h += '<tr><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button> ' + statusStr(p) + '</td><td>' + p.pos + '</td><td>' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted">' + p.pot + '</td>' +
+      '<td class="r">' + fmtM(Cap.capHit(p, S.year)) + '</td><td class="r">' + yrsLeftStr(p) + '</td><td class="r">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td><td class="r">' + fmtM(pv.now) + '</td>' +
+      '<td><button data-act="player" data-id="' + p.id + '">Actions</button></td></tr>';
+  });
+  return h + '</tbody></table></div>';
+};
+function filterBar(key) {
+  return '<div class="filters">' + ['ALL'].concat(POSITIONS).map(function (p) { return '<button class="' + (UI[key] === p ? 'on' : '') + '" data-act="filter" data-k="' + key + '" data-p="' + p + '">' + (p === 'ALL' ? 'All' : p) + '</button>'; }).join('') + '</div>';
+}
+
+VIEWS.depth = function () {
+  var t = S.teams[S.user];
+  var h = '<p class="muted">Starters are highlighted. Injured players are skipped automatically on game day.</p><div class="depthgrid">';
+  POSITIONS.forEach(function (pos) {
+    var ids = t.depth[pos] || [];
+    h += '<section class="card"><h3>' + pos + ' <span class="muted">' + Market.STARTERS[pos] + ' start</span></h3>';
+    if (!ids.length) h += '<p class="bad">Nobody at ' + pos + '.</p>';
+    ids.forEach(function (id, i) {
+      var p = P(id); if (!p) return;
+      h += '<div class="drow' + (i < Market.STARTERS[pos] ? ' start' : '') + '"><span>' + (i + 1) + '. <button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button> ' + statusStr(p) + '</span><span>' + ovrPill(p.ovr) +
+        '<button class="mini" data-act="depth" data-pos="' + pos + '" data-i="' + i + '" data-d="-1" aria-label="Move up">▲</button><button class="mini" data-act="depth" data-pos="' + pos + '" data-i="' + i + '" data-d="1" aria-label="Move down">▼</button></span></div>';
+    });
+    h += '</section>';
+  });
+  return h + '</div><p><button data-act="auto-depth">Reset to best available</button></p>';
+};
+
+VIEWS.cap = function () {
+  var team = T(S.user), years = [0, 1, 2, 3, 4].map(function (i) { return S.year + i; });
+  var h = '<p class="muted">League cap ' + fmtM(capOf(S.year)) + ' for ' + S.year + ' is projected; later years assume ~7% growth. Cap space is approximate: it counts every contract on the roster, this game\'s dead money and rollover, but not dead money from cuts made before the game started.</p>';
+  h += '<div class="tablewrap"><table><thead><tr><th></th>' + years.map(function (y) { return '<th class="r">' + y + '</th>'; }).join('') + '</tr></thead><tbody>';
+  var row = function (label, f, cls) { return '<tr class="' + (cls || '') + '"><td>' + label + '</td>' + years.map(function (y) { return '<td class="r">' + f(y) + '</td>'; }).join('') + '</tr>'; };
+  h += row('League cap (projected)', function (y) { return fmtM(capOf(y)); });
+  h += row('Rollover', function (y) { return fmtM((team.rollover || {})[y] || 0); });
+  h += row('Active contracts', function (y) { return fmtM(Cap.teamCommitted(S.players, team, y)); });
+  h += row('Dead money', function (y) { return fmtM(Cap.teamDead(team, y)); });
+  h += row('Cap space (approx.)', function (y) { var s = space(S.user, y); return '<b class="' + (s < 0 ? 'bad' : '') + '">' + fmtM(s) + '</b>'; }, 'total');
+  h += row('Players under contract', function (y) { return roster(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
+  h += '</tbody></table></div><h3>Contracts</h3><div class="tablewrap"><table><thead><tr><th>Player</th><th>Pos</th>' + years.map(function (y) { return '<th class="r">' + y + '</th>'; }).join('') + '<th class="r">Gtd left</th></tr></thead><tbody>';
+  roster(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
+    h += '<tr><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button></td><td>' + p.pos + '</td>' + years.map(function (y) {
+      var r = Cap.row(p, y); return '<td class="r' + (r && r.void ? ' muted' : '') + '">' + (r ? fmtM(r.cap) + (r.void ? ' void' : '') : '') + '</td>';
+    }).join('') + '<td class="r">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+};
+
+// ---------- player card ----------
+function playerModal(id) {
+  return function () {
+    var p = P(id); if (!p) return '';
+    var mine = p.team === S.user, Y = S.year;
+    var h = '<div class="mhead"><div><h2>' + esc(p.name) + '</h2><p class="muted">' + p.pos + (p.opos && p.opos !== p.pos ? ' (' + p.opos + ')' : '') + ' · age ' + p.age + ' · ' + (p.team ? teamLink(p.team) : p.rights ? 'expiring, ' + p.rights + ' has rights' : 'free agent') +
+      (p.draft && p.draft[1] ? ' · drafted ' + p.draft[0] + ' R' + p.draft[1] + ' #' + p.draft[2] : '') + '</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
+    h += '<div class="grid4">' + metric('Overall', p.ovr, 'potential ' + p.pot) + Object.keys(p.sub || {}).slice(0, 2).map(function (k) { return metric({ pass: 'Passing', acc: 'Accuracy', run: 'Rushing', prod: 'Production', tgt: 'Targets', rec: 'Receiving', rush: 'Pass rush', tkl: 'Tackling', play: 'Playmaking', cov: 'Coverage', pow: 'Leg', net: 'Net punting' }[k] || k, p.sub[k], 'from real stats'); }).join('') + '</div>';
+    if (p.line26) h += '<p class="muted small">2026 (real, to date): ' + esc(p.line26) + '</p>';
+    if (p.s && p.s.g) h += '<p class="small">' + S.year + ' season: ' + statText(p.s, p.pos) + '</p>';
+    if (p.years && p.years.length) {
+      h += '<div class="tablewrap"><table><thead><tr><th>Year</th><th class="r">Base</th><th class="r">Bonus prorated</th><th class="r">Option (pending)</th><th class="r">Roster/other</th><th class="r">Cap hit</th><th class="r">Gtd</th><th class="r">Dead if cut pre-June 1</th></tr></thead><tbody>';
+      Cap.remaining(p, Y).forEach(function (r) {
+        var dc = Cap.releaseCost(p, r.y, false).dead[r.y] || 0;
+        h += '<tr class="' + (r.void ? 'muted' : '') + '"><td>' + r.y + (r.void ? ' (void)' : '') + '</td><td class="r">' + fmtM(r.base) + '</td><td class="r">' + fmtM(r.pro) + '</td><td class="r">' + fmtM(r.opt || 0) + '</td><td class="r">' + fmtM(r.roster + r.other) + '</td><td class="r"><b>' + fmtM(r.cap) + '</b></td><td class="r">' + fmtM(r.gtd) + '</td><td class="r">' + fmtM(dc) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    if (mine) {
+      var pre = releasePreview(p, false), post = Cap.releaseCost(p, Y, true);
+      h += '<div class="release"><h3>Release</h3><div class="grid2">';
+      if (!isPostJune()) {
+        h += '<div><b>Pre-June 1</b><br>' + fmtM(pre.now) + ' dead in ' + Y + '<br><span class="muted">Cap change ' + Y + ': ' + fmtM(pre.savings) + ' saved</span><br><button data-act="release" data-id="' + p.id + '" data-j="0">Release pre-June 1</button></div>';
+        h += '<div><b>Post-June 1 designation</b><br>' + fmtM(post.dead[Y] || 0) + ' in ' + Y + (post.dead[Y + 1] ? ' + ' + fmtM(post.dead[Y + 1]) + ' in ' + (Y + 1) : '') + '<br><span class="muted">Cap change ' + Y + ': ' + fmtM(post.savings) + ' saved · ' + (canJune1(S.user) ? (2 - (S.june1[S.year + S.user] || 0)) + ' designations left' : 'none left') + '</span><br><button data-act="release" data-id="' + p.id + '" data-j="1">Designate post-June 1</button></div>';
+      } else {
+        h += '<div><b>After June 1</b><br>' + fmtM(post.dead[Y] || 0) + ' in ' + Y + (post.dead[Y + 1] ? ' + ' + fmtM(post.dead[Y + 1]) + ' in ' + (Y + 1) : '') + '<br><span class="muted">Cap change ' + Y + ': ' + fmtM(post.savings) + ' saved</span><br><button data-act="release" data-id="' + p.id + '" data-j="0">Release</button></div>';
+      }
+      h += '</div></div><div class="actions">';
+      if (canExtend(p)) h += '<button data-act="offer" data-id="' + p.id + '" data-mode="extend">Extend</button>';
+      var rmax = Cap.restructureMax(p, Y, p.exp);
+      if (rmax > 500) {
+        var n = Math.min(5, Cap.yearsLeft(p, Y));
+        h += '<button data-act="restructure" data-id="' + p.id + '">Restructure (save ' + fmtM(rmax - Math.floor(rmax / n)) + ' now)</button>';
+      }
+      h += '<button data-act="trade-with" data-id="' + p.id + '">Shop in a trade</button></div>';
+      if (rmax > 500) h += '<p class="muted small">Restructure converts ' + fmtM(rmax) + ' of ' + Y + ' base salary into a bonus prorated over ' + Math.min(5, Cap.yearsLeft(p, Y)) + ' years. Future cap hits and dead money go up.</p>';
+    } else if (!p.team && !p.retired) {
+      var canOffer = (S.phase === 'resign' && p.rights === S.user) || S.phase !== 'resign';
+      h += '<div class="actions">' + (canOffer ? '<button class="primary" data-act="offer" data-id="' + p.id + '" data-mode="sign">' + (p.rights === S.user ? 'Re-sign' : 'Make an offer') + '</button>' : '<span class="muted">Free agency opens after the re-sign window.</span>') + '</div>';
+    } else if (p.team) {
+      h += '<div class="actions"><button data-act="trade-for" data-id="' + p.id + '">Trade for him</button></div>';
+    }
+    return h;
+  };
+}
+function statText(s, pos) {
+  var parts = [s.g + ' G'];
+  if (s.pyd) parts.push(s.pyd + ' pass yds', (s.ptd || 0) + ' TD', (s.int || 0) + ' INT');
+  if (s.ruyd) parts.push(s.ruyd + ' rush yds', (s.rutd || 0) + ' rush TD');
+  if (s.ryd) parts.push((s.rec || 0) + ' rec', s.ryd + ' rec yds', (s.rtd || 0) + ' TD');
+  if (s.sk) parts.push(s.sk + ' sacks');
+  if (s.dint) parts.push(s.dint + ' INT');
+  if (s.tk) parts.push(s.tk + ' tkl');
+  if (s.fga) parts.push(s.fgm + '/' + s.fga + ' FG');
+  return parts.join(' · ');
+}
+
+// ---------- contract offer ----------
+function offerModal(id, mode) {
+  var p = P(id);
+  var d = Market.demand(p, marketCap(), S.year);
+  if (!UI.offer || UI.offer.id !== id) UI.offer = { id: id, mode: mode, years: d.years, total: +(d.apy * d.years / 1000).toFixed(1), bonus: +(d.gtd * 0.5 / 1000).toFixed(1), gtd: +(d.gtd / 1000).toFixed(1) };
+  return function () {
+    var o = UI.offer, abbr = S.user;
+    var offer = { years: o.years, total: Math.round(o.total * 1000), bonus: Math.round(o.bonus * 1000), gtd: Math.round(o.gtd * 1000) };
+    var yrs = mode === 'extend' ? buildExtensionYears(p, offer) : Cap.buildContract(offer, S.year, p.exp);
+    var ev = Market.evaluate(p, offer, offerCtx(p, abbr));
+    var hitNow = (Cap.row({ years: yrs }, S.year) || { cap: 0 }).cap - (mode === 'extend' ? Cap.capHit(p, S.year) : 0);
+    var mood = ev.mood >= 1 ? ['g', 'Likely to accept'] : ev.mood >= 0.93 ? ['w', 'Close'] : ['b', 'Not close'];
+    var h = '<div class="mhead"><div><h2>' + (mode === 'extend' ? 'Extend ' : p.rights === S.user ? 'Re-sign ' : 'Offer: ') + esc(p.name) + '</h2><p class="muted">' + p.pos + ' · age ' + p.age + ' · OVR ' + p.ovr + ' · asking about ' + fmtM(d.apy) + '/yr for ' + d.years + ' yrs, ' + fmtM(d.gtd) + ' guaranteed</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
+    h += '<div class="offergrid">' + field('years', 'Years', o.years, 1, 7, 1) + field('total', 'Total $M', o.total, 0.5, 600, 0.1) + field('bonus', 'Signing bonus $M', o.bonus, 0, 300, 0.1) + field('gtd', 'Guaranteed $M', o.gtd, 0, 600, 0.1) + '</div>';
+    if (mode === 'extend') h += '<p class="muted small">Extension starts ' + extensionStart() + '. Prorated bonus already on the books stays in its years.</p>';
+    h += '<div class="tablewrap"><table><thead><tr><th>Year</th><th class="r">Base</th><th class="r">Prorated bonus</th><th class="r">Cap hit</th><th class="r">Gtd</th><th class="r">Dead if cut that year</th></tr></thead><tbody>';
+    var tmp = { years: yrs };
+    yrs.filter(function (r) { return r.y >= S.year; }).forEach(function (r) {
+      h += '<tr><td>' + r.y + (r.void ? ' (void)' : '') + '</td><td class="r">' + fmtM(r.base) + '</td><td class="r">' + fmtM(r.pro) + '</td><td class="r"><b>' + fmtM(r.cap) + '</b></td><td class="r">' + fmtM(r.gtd) + '</td><td class="r">' + fmtM(Cap.releaseCost(tmp, r.y, false).dead[r.y] || 0) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<p>Cap space after: <b class="' + (space(abbr) - hitNow < 0 ? 'bad' : '') + '">' + fmtM(space(abbr) - hitNow) + '</b> <span class="muted">approx.</span></p>';
+    h += '<div class="moodrow"><span class="pill ' + mood[0] + '">' + mood[1] + '</span> <span class="muted">' + ev.notes.map(function (n) { return n.k + (n.good ? ' ✓' : ' ✗'); }).join(' · ') + '</span></div>';
+    if (UI.offerErr) h += '<p class="bad">' + esc(UI.offerErr) + '</p>';
+    h += '<div class="actions"><button data-act="offer-ask">Fill in asking price</button><button class="primary" data-act="offer-submit">Make offer</button></div>';
+    return h;
+  };
+}
+function field(k, label, v, min, max, step) { return '<label>' + label + '<input type="number" inputmode="decimal" data-field="' + k + '" value="' + v + '" min="' + min + '" max="' + max + '" step="' + step + '"></label>'; }
+
+VIEWS.fa = function () {
+  var h = '';
+  if (S.phase === 'resign') {
+    var exp = S.players.filter(function (p) { return p.rights === S.user && !p.team; }).sort(byKey(function (p) { return p.ovr; }, true));
+    h += '<p class="muted">These contracts expired. Re-sign anyone you want to keep before free agency opens; the rest hit the market.</p>';
+    h += faTable(exp, true);
+    return h;
+  }
+  var pool = freeAgents();
+  if (UI.faPos !== 'ALL') pool = pool.filter(function (p) { return p.pos === UI.faPos; });
+  pool.sort(byKey(function (p) { return p.ovr; }, true));
+  h += '<p class="muted">' + (S.phase === 'fa' ? 'Day ' + (S.faDay + 1) + ' of ' + FA_DAYS + '. Asking prices drop as free agency goes on, but other teams sign players every day.' : 'Unsigned players. Asks are lower this late in the year.') + '</p>';
+  return h + filterBar('faPos') + faTable(pool.slice(0, 150), false);
+};
+function faTable(list, resign) {
+  if (!list.length) return '<p class="muted">Nobody here.</p>';
+  var h = '<div class="tablewrap"><table><thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>OVR</th><th>POT</th><th>Last team</th><th class="r">Asking/yr</th><th class="r">Yrs</th><th class="r">Gtd</th><th></th></tr></thead><tbody>';
+  list.forEach(function (p) {
+    var d = Market.demand(p, marketCap(), S.year), disc = S.phase === 'resign' ? 1 : 1 - Market.faDiscount(offerCtx(p, S.user).daysIntoFA);
+    h += '<tr><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button></td><td>' + p.pos + '</td><td>' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted">' + p.pot + '</td><td>' + (p.prevTeam || p.cutBy || '—') + '</td>' +
+      '<td class="r">' + fmtM(d.apy * disc) + '</td><td class="r">' + d.years + '</td><td class="r">' + fmtM(d.gtd * disc) + '</td><td><button data-act="offer" data-id="' + p.id + '" data-mode="sign">' + (resign ? 'Re-sign' : 'Offer') + '</button></td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+// ---------- trade ----------
+function tradeState() {
+  if (!UI.trade) UI.trade = { ai: aiTeams().filter(function (a) { return a !== S.user; })[0], give: { players: [], picks: [] }, get: { players: [], picks: [] }, result: null, suggestion: null };
+  return UI.trade;
+}
+VIEWS.trade = function () {
+  var tr = tradeState();
+  var ev = aiTradeEval(tr.ai, tr.give, tr.get);
+  var pct = Math.round(clamp(ev.ratio, 0, 1.2) / 1.2 * 100);
+  var label = ev.accept ? ['g', 'They would accept'] : ev.ratio > 0.85 ? ['w', 'Close: add a little'] : ['b', 'Not interested yet'];
+  var h = '<div class="tradehead"><label>Trade partner <select data-act="trade-team">' + TEAMS.filter(function (t) { return t.abbr !== S.user; }).map(function (t) { return '<option value="' + t.abbr + '"' + (t.abbr === tr.ai ? ' selected' : '') + '>' + t.abbr + ' · ' + esc(t.name) + ' (' + teamRating(t.abbr).ovr + ' OVR, ' + fmtM(space(t.abbr)) + ' space)</option>'; }).join('') + '</select></label></div>';
+  h += '<div class="grid2">' + tradeSide(S.user, tr.give, 'give', 'You send') + tradeSide(tr.ai, tr.get, 'get', tr.ai + ' sends') + '</div>';
+  h += '<section class="card"><div class="row"><b>' + tr.ai + ' interest</b><span class="pill ' + label[0] + '">' + label[1] + '</span></div><div class="bar"><div style="width:' + pct + '%" class="' + label[0] + '"></div></div>';
+  h += '<p class="muted small">' + (ev.msg ? '<span class="bad">' + esc(ev.msg) + '</span> ' : '') + 'Your cap after: ' + fmtM(space(S.user) + ev.capUser) + ' · ' + tr.ai + ' cap after: ' + fmtM(space(tr.ai) + ev.capAI) + (isPostJune() ? ' · post-June 1 rules: unamortized bonus splits over two years' : ' · pre-June 1: all unamortized bonus hits now') + '</p>';
+  if (tr.suggestion) h += '<p>' + tr.suggestion + '</p>';
+  if (tr.result) h += '<p class="' + (tr.result.ok ? 'good' : 'bad') + '">' + esc(tr.result.text) + '</p>';
+  h += '<div class="actions"><button data-act="trade-ask">What would it take?</button><button data-act="trade-clear">Clear</button><button class="primary" data-act="trade-propose">Propose trade</button></div></section>';
+  return h;
+};
+function tradeSide(abbr, side, key, title) {
+  var ros = roster(abbr).sort(byKey(function (p) { return p.ovr; }, true));
+  var post = isPostJune();
+  var h = '<section class="card"><h3>' + chip(abbr) + title + '</h3><div class="pickrow">';
+  picksOf(abbr).forEach(function (k) {
+    var on = side.picks.indexOf(k.id) >= 0;
+    h += '<button class="tag' + (on ? ' on' : '') + '" data-act="trade-toggle" data-side="' + key + '" data-kind="picks" data-id="' + k.id + '">' + pickLabel(k) + '</button>';
+  });
+  h += '</div><div class="tablewrap short"><table><tbody>';
+  ros.forEach(function (p) {
+    var on = side.players.indexOf(p.id) >= 0;
+    var tc = Cap.tradeCost(p, S.year, post);
+    h += '<tr class="' + (on ? 'sel' : '') + '"><td><input type="checkbox" data-act="trade-toggle" data-side="' + key + '" data-kind="players" data-id="' + p.id + '"' + (on ? ' checked' : '') + ' aria-label="Include ' + esc(p.name) + '"></td><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button></td><td>' + p.pos + '</td><td>' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="r">' + fmtM(tc.newHit) + '</td><td class="r muted">' + yrsLeftStr(p) + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="muted small">Cap hit shown is what the receiving team takes on (salary only; the old team keeps the bonus as dead money).</p></section>';
+}
+
+// ---------- draft ----------
+VIEWS.draft = function () {
+  if (!S.draft) return '<p class="muted">The draft happens after free agency.</p>';
+  var k = currentPick(), onClock = k && k.owner === S.user;
+  var pool = draftPool();
+  if (UI.draftPos !== 'ALL') pool = pool.filter(function (p) { return p.pos === UI.draftPos; });
+  var h = '<div class="grid2"><section class="card"><h3>' + (k ? 'Pick ' + k.no + ' (round ' + k.round + '): ' + teamLink(k.owner) + ' on the clock' : 'Draft complete') + '</h3>';
+  h += '<p class="muted small">Your picks: ' + (picksOf(S.user).filter(function (x) { return x.year === S.year; }).map(function (x) { return '#' + x.no; }).join(', ') || 'none left') + '. Rookie contracts follow the slotted wage scale.</p>';
+  h += '<div class="actions">' + (onClock ? '<span class="pill g">You are on the clock</span>' : '<button class="primary" data-act="draft-sim">Sim to my next pick</button>') + '<button data-act="draft-auto">Auto-draft the rest</button></div></section>';
+  h += '<section class="card"><h3>Recent picks</h3><ul class="news">' + S.draft.made.slice(-8).reverse().map(function (m) { var p = P(m.id); return '<li>#' + m.no + ' ' + teamLink(m.team) + ' ' + (p ? p.pos + ' ' + esc(p.name) : '') + '</li>'; }).join('') + '</ul></section></div>';
+  h += filterBar('draftPos') + '<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Prospect</th><th>Pos</th><th>Age</th><th>College</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
+  pool.slice(0, 80).forEach(function (p, i) {
+    h += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + p.pos + '</td><td>' + p.age + '</td><td class="muted">' + esc(p.college) + '</td><td>' + ovrPill(p.ovr) + '</td><td>' + p.pot + '</td><td>' + (onClock ? '<button class="primary" data-act="draft-pick" data-id="' + p.id + '">Draft</button>' : '') + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+};
+
+// ---------- schedule, standings, leaders ----------
+VIEWS.schedule = function () {
+  if (!S.schedule.length) return '<p class="muted">The schedule comes out when the regular season starts.</p>';
+  var h = '<div class="tablewrap"><table><thead><tr><th>Week</th><th>Opponent</th><th>Result</th></tr></thead><tbody>';
+  S.schedule.forEach(function (wk, i) {
+    var g = wk.filter(function (g) { return g.h === S.user || g.a === S.user; })[0];
+    if (!g) { h += '<tr><td>' + (i + 1) + '</td><td class="muted">Bye</td><td></td></tr>'; return; }
+    var home = g.h === S.user, opp = home ? g.a : g.h, res = '';
+    if (g.hs != null) { var us = home ? g.hs : g.as, them = home ? g.as : g.hs; res = '<b class="' + (us > them ? 'good' : us < them ? 'bad' : '') + '">' + (us > them ? 'W' : us < them ? 'L' : 'T') + '</b> ' + us + '-' + them; }
+    h += '<tr class="' + (i === S.week ? 'sel' : '') + '"><td>' + (i + 1) + '</td><td>' + (home ? 'vs ' : 'at ') + teamLink(opp) + ' <span class="muted">' + recStr(S.teams[opp].rec) + '</span></td><td>' + res + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  var wi = Math.max(0, Math.min(S.week - 1, WEEKS - 1));
+  if (S.week > 0) {
+    h += '<h3>Week ' + (wi + 1) + ' scores</h3><div class="scores">' + S.schedule[wi].map(function (g) { return '<div class="score">' + teamLink(g.a) + ' ' + g.as + ' at ' + teamLink(g.h) + ' ' + g.hs + '</div>'; }).join('') + '</div>';
+  }
+  return h;
+};
+VIEWS.standings = function () {
+  var h = '';
+  if (S.playoffs) {
+    h += '<section class="card"><h3>Playoffs</h3>' + (S.playoffs.champ ? '<p><b>' + teamLink(S.playoffs.champ) + ' won the Super Bowl.</b></p>' : '') + '<p class="muted small">Seeds: AFC ' + S.playoffs.AFC.join(', ') + ' · NFC ' + S.playoffs.NFC.join(', ') + '</p>';
+    h += '<ul class="news">' + S.playoffs.games.map(function (g) { return '<li><span class="muted">' + ROUND_NAMES[g.round] + '</span> ' + teamLink(g.a) + ' ' + g.as + ' at ' + teamLink(g.h) + ' ' + g.hs + '</li>'; }).join('') + '</ul></section>';
+  }
+  h += '<div class="grid2">';
+  divisionStandings().forEach(function (d) {
+    h += '<section class="card"><h3>' + d.conf + ' ' + d.div + '</h3><table><thead><tr><th>Team</th><th>W-L</th><th>PF</th><th>PA</th><th>OVR</th></tr></thead><tbody>' + d.teams.map(function (a) {
+      var r = S.teams[a].rec; return '<tr class="' + (a === S.user ? 'sel' : '') + '"><td>' + teamLink(a) + '</td><td>' + recStr(r) + '</td><td>' + r.pf + '</td><td>' + r.pa + '</td><td>' + teamRating(a).ovr + '</td></tr>';
+    }).join('') + '</tbody></table></section>';
+  });
+  return h + '</div>';
+};
+VIEWS.leaders = function () {
+  var cats = [['pyd', 'Passing yards'], ['ptd', 'Passing TD'], ['ruyd', 'Rushing yards'], ['ryd', 'Receiving yards'], ['rec', 'Receptions'], ['sk', 'Sacks'], ['dint', 'Interceptions'], ['tk', 'Tackles']];
+  var h = '<div class="filters">' + cats.map(function (c) { return '<button class="' + (UI.leaders === c[0] ? 'on' : '') + '" data-act="leaders" data-c="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div>';
+  var k = UI.leaders;
+  var list = S.players.filter(function (p) { return p.s && p.s[k]; }).sort(byKey(function (p) { return p.s[k]; }, true)).slice(0, 25);
+  if (!list.length) return h + '<p class="muted">No games played yet this season.</p>';
+  h += '<div class="tablewrap"><table><thead><tr><th>#</th><th>Player</th><th>Team</th><th>Pos</th><th class="r">' + cats.filter(function (c) { return c[0] === k; })[0][1] + '</th><th>G</th></tr></thead><tbody>';
+  list.forEach(function (p, i) { h += '<tr class="' + (p.team === S.user ? 'sel' : '') + '"><td>' + (i + 1) + '</td><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button></td><td>' + (p.team ? teamLink(p.team) : '—') + '</td><td>' + p.pos + '</td><td class="r"><b>' + p.s[k] + '</b></td><td>' + (p.s.g || 0) + '</td></tr>'; });
+  return h + '</tbody></table></div>';
+};
+VIEWS.news = function () { return '<section class="card">' + newsList(S.news.slice(0, 120)) + '</section>'; };
+VIEWS.history = function () {
+  if (!S.history.length) return '<p class="muted">Finish a season to start your history.</p>';
+  return '<div class="tablewrap"><table><thead><tr><th>Season</th><th>Champion</th><th>Your record</th><th>Finish</th><th>MVP</th></tr></thead><tbody>' + S.history.slice().reverse().map(function (h) {
+    return '<tr><td>' + h.year + '</td><td>' + teamLink(h.champ) + '</td><td>' + h.rec + '</td><td>' + h.userFinish + '</td><td>' + esc(h.mvp) + '</td></tr>';
+  }).join('') + '</tbody></table></div>';
+};
+
+// ---------- events ----------
+function onClick(e) {
+  var el = e.target.closest('[data-act]'); if (!el) return;
+  var a = el.getAttribute('data-act'), d = el.dataset;
+  if (a === 'close-bg' && e.target !== el) return;
+  if (el.tagName === 'SELECT') return;
+  var r;
+  switch (a) {
+    case 'new': if (hasSave() && !confirm('Start a new game as ' + TEAM[d.t].name + '? This replaces your saved game.')) return; newGame(DATA, d.t); reindex(); Market.setScale(S.payScale); UI.view = 'hub'; UI.trade = null; break;
+    case 'continue': loadGame(); break;
+    case 'view': UI.view = d.v; UI.msg = null; UI.modal = null; window.scrollTo(0, 0); break;
+    case 'advance': r = advance(); if (!r.ok) flash(r.msg, true); else UI.msg = null; if (S.phase === 'draft' && UI.view !== 'draft') UI.view = 'draft'; if (S.phase === 'preseason' && UI.view === 'draft') UI.view = 'roster'; break;
+    case 'sim-season': UI.msg = null; var g = 0; while (S.phase === 'season' && S.week < WEEKS && g++ < 30) advance(); break;
+    case 'sim-playoffs': var g2 = 0; while (S.phase === 'playoffs' && !S.playoffs.champ && g2++ < 6) advance(); UI.view = 'standings'; break;
+    case 'skip-fa': UI.msg = null; var g3 = 0; while (S.phase === 'fa' && g3++ < 10) advance(); UI.view = 'draft'; break;
+    case 'auto-roster': userAutoRoster(); flash('Roster filled with minimum-salary players and cut to ' + Math.min(roster(S.user).length, ROSTER_MAX) + '.'); break;
+    case 'filter': UI[d.k] = d.p; break;
+    case 'sort': UI.sort = d.s; break;
+    case 'leaders': UI.leaders = d.c; break;
+    case 'player': UI.offer = null; UI.offerErr = null; UI.modal = playerModal(d.id); break;
+    case 'close': case 'close-bg': UI.modal = null; UI.offer = null; break;
+    case 'release':
+      var p = P(d.id), pv = releasePreview(p, d.j === '1');
+      if (!confirm('Release ' + p.name + '? Dead money: ' + fmtM(pv.now) + ' in ' + S.year + (pv.next ? ' and ' + fmtM(pv.next) + ' in ' + (S.year + 1) : '') + '. Cap savings this year: ' + fmtM(pv.savings) + '.')) return;
+      r = release(p, d.j === '1'); UI.modal = null; flash(r.ok ? p.name + ' released.' : r.msg, !r.ok); break;
+    case 'restructure':
+      var rp = P(d.id), res = restructurePlayer(rp, Cap.restructureMax(rp, S.year, rp.exp));
+      flash(res.saved ? 'Restructured ' + rp.name + ': ' + fmtM(res.saved) + ' saved this year.' : 'Nothing to restructure.'); UI.modal = playerModal(d.id); break;
+    case 'offer': UI.offer = null; UI.offerErr = null; UI.modal = offerModal(d.id, d.mode); break;
+    case 'offer-ask':
+      var op = P(UI.offer.id), dd = Market.demand(op, marketCap(), S.year), disc = UI.offer.mode === 'extend' || S.phase === 'resign' ? 1 : 1 - Market.faDiscount(offerCtx(op, S.user).daysIntoFA);
+      UI.offer.years = dd.years; UI.offer.total = +(dd.apy * dd.years * disc / 1000).toFixed(1); UI.offer.gtd = +(dd.gtd * disc / 1000).toFixed(1); UI.offer.bonus = +(dd.gtd * disc * 0.5 / 1000).toFixed(1); break;
+    case 'offer-submit': submitOffer(); break;
+    case 'depth':
+      var arr = S.teams[S.user].depth[d.pos], i = +d.i, j = i + (+d.d);
+      if (j >= 0 && j < arr.length) { var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp; } break;
+    case 'auto-depth': S.teams[S.user].depth = {}; autoDepth(S.user); break;
+    case 'trade-toggle':
+      var tr = tradeState(), side = tr[d.side][d.kind], ix = side.indexOf(d.id);
+      if (ix >= 0) side.splice(ix, 1); else side.push(d.id);
+      tr.result = null; tr.suggestion = null; break;
+    case 'trade-with': UI.trade = null; tradeState().give.players.push(d.id); UI.modal = null; UI.view = 'trade'; break;
+    case 'trade-for': var pp = P(d.id); UI.trade = null; var ts = tradeState(); ts.ai = pp.team; ts.get.players.push(d.id); UI.modal = null; UI.view = 'trade'; break;
+    case 'trade-clear': UI.trade = { ai: tradeState().ai, give: { players: [], picks: [] }, get: { players: [], picks: [] } }; break;
+    case 'trade-ask':
+      var t2 = tradeState(), w = whatWouldItTake(t2.ai, t2.give, t2.get);
+      t2.suggestion = w.done ? 'They already like this deal.' : w.options.length ? t2.ai + ' would do it if you add: ' + w.options.map(function (o) { return o.label; }).join(' or ') + '.' : 'Nothing on your side gets this done. Ask for less or take on salary.';
+      break;
+    case 'trade-propose':
+      var t3 = tradeState(), ev = aiTradeEval(t3.ai, t3.give, t3.get);
+      if (ev.accept) { executeTrade(t3.ai, t3.give, t3.get); UI.trade = { ai: t3.ai, give: { players: [], picks: [] }, get: { players: [], picks: [] }, result: { ok: true, text: 'Trade accepted.' } }; }
+      else t3.result = { ok: false, text: ev.msg || t3.ai + ' turned it down.' };
+      break;
+    case 'draft-sim': draftUntilUser(false); break;
+    case 'draft-auto': draftUntilUser(true); flash('Draft complete. Rookies are signed to slotted contracts.'); break;
+    case 'draft-pick': makePick(currentPick(), P(d.id)); draftUntilUser(false); break;
+  }
+  render();
+}
+function onChange(e) {
+  var el = e.target;
+  if (el.dataset.act === 'trade-team') { UI.trade = { ai: el.value, give: tradeState().give, get: { players: [], picks: [] } }; render(); return; }
+  if (el.dataset.field && UI.offer) {
+    var v = parseFloat(el.value); if (isNaN(v)) return;
+    UI.offer[el.dataset.field] = el.dataset.field === 'years' ? clamp(Math.round(v), 1, 7) : Math.max(0, v);
+    UI.offerErr = null;
+    var focus = el.dataset.field;
+    render();
+    var again = document.querySelector('[data-field="' + focus + '"]'); if (again) { again.focus(); }
+  }
+}
+function submitOffer() {
+  var o = UI.offer, p = P(o.id);
+  if (!(o.total > 0) || o.years < 1) { UI.offerErr = 'Enter a total and number of years.'; return; }
+  if (o.bonus > o.total || o.gtd > o.total) { UI.offerErr = 'Bonus and guarantees can\'t exceed the total.'; return; }
+  var offer = { years: o.years, total: Math.round(o.total * 1000), bonus: Math.round(o.bonus * 1000), gtd: Math.round(Math.max(o.gtd, o.bonus) * 1000) };
+  var ev = Market.evaluate(p, offer, offerCtx(p, S.user));
+  if (!ev.accept) { p.rej = (p.rej || 0) + 1; UI.offerErr = p.name + ' turned it down' + (ev.mood < 0.85 ? ' and was not impressed.' : '.'); return; }
+  var r = o.mode === 'extend' ? extend(p, offer) : sign(p, S.user, offer);
+  if (!r.ok) { UI.offerErr = r.msg; return; }
+  UI.modal = null; UI.offer = null;
+  flash(p.name + ' accepted: ' + o.years + ' yr, ' + fmtM(offer.total) + '.');
+}
+
+// ---------- save / load ----------
+var SAVE_KEY = 'nflgm-save-v1', saveTimer = null;
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+function scheduleSave() { if (saveTimer) clearTimeout(saveTimer); saveTimer = setTimeout(saveGame, 400); }
+function saveGame() {
+  if (!S) return;
+  try {
+    var idx = S._idx; delete S._idx; S.rng = RNG.s;
+    var json = JSON.stringify({ S: S, BASE: BASE });
+    S._idx = idx;
+    localStorage.setItem(SAVE_KEY, window.LZString ? 'lz:' + LZString.compressToUTF16(json) : json);
+  } catch (e) { console.warn('save failed', e); flash('Could not save: browser storage is full or blocked.', true); }
+}
+function loadGame() {
+  try {
+    var raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
+    var json = raw.slice(0, 3) === 'lz:' ? LZString.decompressFromUTF16(raw.slice(3)) : raw;
+    var o = JSON.parse(json);
+    S = o.S; BASE = o.BASE; reindex(); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+    UI.view = 'hub';
+    return true;
+  } catch (e) { console.warn('load failed', e); return false; }
+}
+
+// Boot: load data, restore save, wire events.
+var DATA = null;
+(function boot() {
+  document.addEventListener('click', onClick);
+  document.addEventListener('change', onChange);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && UI.modal) { UI.modal = null; UI.offer = null; render(); } });
+  fetch('data.json').then(function (r) { return r.json(); }).then(function (d) {
+    DATA = d; window.DATA = d; BASE = d.meta;
+    render();
+  }).catch(function () {
+    document.getElementById('app').innerHTML = '<div class="start"><h1>NFL GM</h1><p class="bad">Could not load player data. Reload the page to try again.</p></div>';
+  });
+})();
+
+</script>
+</body>
+</html>

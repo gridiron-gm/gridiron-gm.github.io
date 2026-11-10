@@ -30,7 +30,7 @@ function newGame(data, userAbbr) {
   // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
   S.payScale = Market.calibrate(S.players, capOf(S.year), S.year, 0.88);
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });
-  news('Welcome to ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
+  news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
   return S;
 }
 

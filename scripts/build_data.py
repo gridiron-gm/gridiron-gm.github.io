@@ -108,7 +108,12 @@ def contract_years(c):
             base = rost = 0
         other = cap - base - pro - rost - o_exer - o_pend   # workout, per-game, other bonuses
         if void:
-            other = 0; o_pend = cap - pro - o_exer   # void year carries all leftover acceleration
+            # void year shows all leftover acceleration. Pending (unexercised) option money in this and
+            # later void years stays pending; the rest is real proration that accelerates.
+            other = 0
+            opt_left = sum(k(hist[yy]['option_bonus']) for yy in yrs if yy >= y) - o_exer
+            o_pend = max(0, min(cap - o_exer, opt_left))
+            pro = cap - o_exer - o_pend
         row = {'y': y, 'base': base, 'pro': pro + o_exer, 'opt': o_pend, 'roster': rost, 'other': other,
                'gtd': 0 if void else min(k(s['guaranteed_salary']), base + rost + max(other, 0) +
                                          sum(op['per'] * op['span'] for op in options if op['y'] == y)),

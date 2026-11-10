@@ -39,6 +39,7 @@ var RNG = {
 
 function fmtM(k, dp) {
   if (k == null) return '–';
+  if (Math.round(k) === 0) return '$0';
   var neg = k < 0; k = Math.abs(k);
   var s = k >= 1000 ? '$' + (k / 1000).toFixed(dp == null ? 1 : dp) + 'M' : '$' + Math.round(k) + 'K';
   return neg ? '−' + s : s;
