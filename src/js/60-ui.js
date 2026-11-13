@@ -53,6 +53,7 @@ function renderStart() {
   var has = hasSave();
   $app().innerHTML = '<div class="start"><h1>NFL GM</h1><p class="muted">Real rosters and contracts (OverTheCap via nflverse). Ratings are derived from 2025–26 stats and snaps. Start in the ' + (window.DATA ? DATA.meta.startYear : 2027) + ' offseason.</p>' +
     '<p class="actions">' + (has ? '<button class="primary" data-act="continue">Continue saved game</button>' : '') + '<button data-act="import">Import save</button></p>' + importInput() +
+    '<p class="seedrow"><label>Seed <input id="seed" inputmode="numeric" placeholder="random" size="10"></label> <span class="muted small">Optional. The same seed and the same moves replay the same league.</span></p>' +
     '<h2>Pick a team</h2><div class="teamgrid">' + TEAMS.slice().sort(byKey(function (t) { return t.name; })).map(function (t) {
       return '<button class="teambtn' + (t.abbr === 'NE' ? ' pick' : '') + '" data-act="new" data-t="' + t.abbr + '">' + chip(t.abbr) + '<b>' + t.abbr + '</b><span>' + esc(t.name) + '</span></button>';
     }).join('') + '</div>' + (has ? '<p class="muted small">Starting a new game replaces your saved game.</p>' : '') + '</div>';
@@ -387,7 +388,7 @@ function onClick(e) {
   if (el.tagName === 'SELECT') return;
   var r;
   switch (a) {
-    case 'new': if (hasSave() && !confirm('Start a new game as ' + TEAM[d.t].name + '? This replaces your saved game.')) return; newGame(DATA, d.t); reindex(); Market.setScale(S.payScale); UI.view = 'hub'; UI.trade = null; break;
+    case 'new': if (hasSave() && !confirm('Start a new game as ' + TEAM[d.t].name + '? This replaces your saved game.')) return; var sd = document.getElementById('seed'); newGame(DATA, d.t, sd ? sd.value.trim() : null); reindex(); UI.view = 'hub'; UI.trade = null; break;
     case 'continue': loadGame(); break;
     case 'view': UI.view = d.v; UI.msg = null; UI.modal = null; window.scrollTo(0, 0); break;
     case 'advance': r = advance(); if (!r.ok) flash(r.msg, true); else UI.msg = null; if (S.phase === 'draft' && UI.view !== 'draft') UI.view = 'draft'; if (S.phase === 'preseason' && UI.view === 'draft') UI.view = 'roster'; break;
@@ -490,7 +491,7 @@ function importSave(file) {
       var o = JSON.parse(reader.result);
       if (o.app !== 'nfl-gm' || !o.S || !o.BASE || !o.S.players || !o.S.teams) throw new Error('not a save');
       if (S && !confirm('Load this save (' + o.S.user + ', ' + o.S.year + ')? It replaces the game in progress.')) return;
-      S = o.S; BASE = o.BASE; reindex(); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+      S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
       UI.view = 'hub'; UI.modal = null; UI.trade = null;
       flash('Save loaded: ' + TEAM[S.user].name + ', ' + S.year + '.');
       saveGame(); render();
@@ -515,7 +516,7 @@ function loadGame() {
     var raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
     var json = raw.slice(0, 3) === 'lz:' ? LZString.decompressFromUTF16(raw.slice(3)) : raw;
     var o = JSON.parse(json);
-    S = o.S; BASE = o.BASE; reindex(); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+    S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
     UI.view = 'hub';
     return true;
   } catch (e) { console.warn('load failed', e); return false; }

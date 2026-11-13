@@ -486,34 +486,41 @@ var Market = (function () {
     return clamp(Math.round(o), 30, 99);
   }
 
-  // fitted so pay by rating tracks real APY by positional rank (e.g. WR: 95 ~ $34M, 90 ~ $25M, 80 ~ $10M, 70 ~ $2.5M)
-  function talentCurve(ovr) { return Math.pow(clamp((ovr - 55) / 42, 0, 1), 2.6); }
-
-  // Fair yearly salary for a player at a given overall, in a league year with cap `cap`.
-  var scale = 1;   // league-wide pay level, calibrated at new game so total demand ~ total cap
+  // Salary curve (pay by on-field rating), fit in scripts/build_data.py on every current contract,
+  // minimums and rookie deals included, and scaled so a full league's pay fills ~95% of the cap.
+  var CURVE = { a: 60, b: 1.2, L: 0.773, floor: 0.0029 };
+  function setCurve(c) { if (c) CURVE = c; }
+  function talentCurve(ovr) { return Math.pow(clamp((ovr - CURVE.a) / (99 - CURVE.a), 0, 1), CURVE.b); }
+  // rating-based value as a share of the cap
+  function curveShare(pos, ovr) { return CURVE.floor + CURVE.L * TOP_SHARE[pos] * talentCurve(ovr); }
+  var scale = 1;   // kept for old saves; no longer adjusted (market value replaced the pay multiplier)
   function setScale(x) { scale = x; }
   function valueAt(pos, ovr, cap, exp, year) {
-    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * TOP_SHARE[pos] * talentCurve(ovr) * scale));
+    return Math.max(Cap.minSalary(exp || 4, year || 2027), Math.round(cap * curveShare(pos, ovr) * scale));
   }
-  // Pick the scale so the best 53 x 32 players' fair salaries add up to `share` of all 32 caps.
-  function calibrate(players, cap, year, share) {
-    scale = 1;
-    var best = players.slice().sort(function (a, b) { return b.ovr - a.ovr; }).slice(0, 53 * 32);
-    var tot = 0;
-    best.forEach(function (p) { tot += valueAt(p.pos, p.ovr, cap, p.exp, year); });
-    var mins = best.length * Cap.minSalary(3, year);
-    scale = Math.max(0.5, (share * 32 * cap - mins) / Math.max(1, tot - mins));
-    return scale;
+
+  // Market value: what the league thinks a player is worth per year, as a share of the cap. Separate from
+  // the on-field rating. Year 1 comes from real contracts and draft slot (build_data.py); each offseason
+  // it moves a third of the way toward the curve value of his rating and season performance.
+  function marketShare(p) { return p.mv != null ? p.mv : curveShare(p.pos, p.ovr); }
+  function driftMarketValue(p, perf) {
+    var target = curveShare(p.pos, clamp(p.ovr + (perf || 0), 30, 99));
+    p.mv = Math.round((marketShare(p) + (target - marketShare(p)) / 3) * 1e5) / 1e5;
+  }
+  // new players (draft picks, generated depth): draft slot plus rating
+  function initialMarketShare(p, pickNo) {
+    var slot = pickNo ? Cap.rookieDeal(pickNo, 2027, 326900).total / 4 / 326900 : 0;
+    return Math.round(Math.max(curveShare(p.pos, p.ovr), slot) * 1e5) / 1e5;
   }
 
   // What the player asks for. Uses the next two seasons' expected rating (teams pay for the future).
   function demand(p, cap, year) {
     var o = Math.round((projOvr(p, 0) * 2 + projOvr(p, 1)) / 3);
-    var apy = valueAt(p.pos, o, cap, p.exp, year);
+    var apy = Math.max(Cap.minSalary(p.exp, year), Math.round(marketShare(p) * cap * scale));
     var age = p.age;
     var years = age <= 25 ? 5 : age <= 27 ? 4 : age <= 29 ? 3 : age <= 31 ? 2 : 1;
     if (apy < 3000) years = Math.min(years, 2);
-    var gShare = clamp(0.2 + 0.55 * talentCurve(o), 0.05, 0.75);
+    var gShare = clamp(0.25 + 0.5 * Math.min(1, marketShare(p) / TOP_SHARE[p.pos] / 0.6), 0.05, 0.75);
     if (apy <= Cap.minSalary(p.exp, year) + 200) gShare = 0;
     return { apy: apy, years: years, gtd: Math.round(apy * years * gShare), ovrBasis: o };
   }
@@ -568,9 +575,12 @@ var Market = (function () {
     var rows = Cap.remaining(p, year).filter(function (r) { return !r.void; });
     var v = 0;
     var n = Math.max(1, Math.min(4, rows.length));
+    var mvNow = Math.max(Cap.minSalary(p.exp, year), marketShare(p) * cap);
     for (var i = 0; i < n; i++) {
-      var o = projOvr(p, i);
-      var worth = valueAt(p.pos, o, cap * Math.pow(1.07, i), p.exp + i, year + i);
+      var o = projOvr(p, i), capI = cap * Math.pow(1.07, i);
+      // market value now, drifting a third of the way per year toward his projected rating's value
+      var target = valueAt(p.pos, o, capI, p.exp + i, year + i);
+      var worth = target + (mvNow * Math.pow(1.07, i) - target) * Math.pow(2 / 3, i);
       var cost = rows[i] ? rows[i].cap : worth;             // after the deal ends he'd cost market price
       v += Math.pow(DISCOUNT, i) * (worth * 1.15 - cost);   // surplus
       v += Math.pow(DISCOUNT, i) * worth * 0.35;            // you also just get a good player
@@ -591,7 +601,7 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, calibrate: calibrate, getScale: function () { return scale; } };
+           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, initialMarketShare: initialMarketShare };
 })();
 
 // League state, rosters, depth charts, transactions, AI front offices.
@@ -603,9 +613,11 @@ var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft',
                     season: 'Regular season', playoffs: 'Playoffs' };
 var ROSTER_MAX_OFF = 90, ROSTER_MAX = 53, FA_DAYS = 6, TRADE_DEADLINE_WEEK = 9;
 
-function newGame(data, userAbbr) {
+// seed: pass a number to make the whole league reproducible (same seed + same choices = same results)
+function newGame(data, userAbbr, seed) {
   BASE = data.meta;
-  S = { v: 1, seed: (Date.now() % 1e9) | 0, year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
+  Market.setCurve(BASE.curve); Market.setScale(1);
+  S = { v: 1, seed: seed != null && seed !== '' && !isNaN(+seed) ? (+seed | 0) : (Date.now() % 1e9) | 0, fixedSeed: seed != null && seed !== '' && !isNaN(+seed), year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
         user: userAbbr, teams: {}, picks: [], players: [], schedule: [], news: [], playoffs: null, history: [],
         draft: null, nextId: 1, june1: {}, lastOrder: null, awards: [] };
   RNG.s = S.seed;
@@ -628,7 +640,7 @@ function newGame(data, userAbbr) {
     S.targetPipe[pos] = S.players.filter(function (p) { return p.pos === pos && Market.projOvr(p, 2) >= 80; }).length;
   });
   // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
-  S.payScale = Market.calibrate(S.players, capOf(S.year), S.year, 0.88);
+  S.payScale = 1;   // pay multiplier retired: market value + the fitted salary curve set prices
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });
   news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
   return S;
@@ -924,7 +936,9 @@ function aiCapFix(abbr, buffer) {
                 .sort(byKey(function (p) { return Cap.restructureMax(p, S.year, p.exp); }, true))[0];
     if (rc) { restructurePlayer(rc, Cap.restructureMax(rc, S.year, rc.exp)); continue; }
     var cut = ros.map(function (p) { var pv = releasePreview(p, !isPostJune() && canJune1(abbr) && Cap.capHit(p, S.year) > 15000); return { p: p, pv: pv, s: pv.savings / 1000 - Math.max(0, p.ovr - 60) * 0.5 }; })
-                 .filter(function (x) { return x.pv.savings > 500; }).sort(byKey(function (x) { return x.s; }, true))[0];
+                 .filter(function (x) { return x.pv.savings > 500; })
+                 // keep good young players unless there's no other way to get compliant
+                 .sort(byKey(function (x) { return x.s - (x.p.ovr >= 80 && x.p.age < 30 ? 1000 : 0); }, true))[0];
     if (!cut) break;
     release(cut.p, cut.pv.post && !isPostJune());
   }
@@ -954,7 +968,8 @@ function aiFreeAgencyDay() {
     order.forEach(function (abbr) {
       if (roster(abbr).length >= rosterMax() - 2) return;
       var sp = space(abbr);
-      var target = 3000 + rookieRoom;                 // teams aim to spend down to this much space
+      // teams keep ~$8M of room through the first days of free agency, then spend down further
+      var target = (S.phase === 'fa' && S.faDay < 3 ? 8000 : 3000) + rookieRoom;
       var disc = 1 - Market.faDiscount(S.faDay);
       if (sp <= target) return;
       var best = null, bestScore = 0;
@@ -979,6 +994,30 @@ function aiFreeAgencyDay() {
       }
     });
   }
+}
+
+// Late market (preseason): good players still unsigned take one-year "prove-it" deals for whatever room
+// a team has, as long as it reaches about a third of their ask. Teams with the most room go first.
+// room that will still be there at week 1, when every contract counts (not just the top 51)
+function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 1500; }
+function aiLateMarket() {
+  freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
+    var teams = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+      .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
+      .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
+    if (!teams.length) {
+      // nobody has the room: the team that needs him most makes room (restructures, then cuts lesser players)
+      var needy = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
+      if (!needy) return;
+      aiCapFix(needy, floor + 1500 + Math.max(0, space(needy) - fullSpace(needy)));
+      if (lateRoom(needy) < floor) return;
+      teams = [{ a: needy, room: lateRoom(needy) }];
+    }
+    var price = Math.min(ask, teams[0].room);
+    sign(p, teams[0].a, { years: 1, total: price, bonus: 0, gtd: Math.round(price * 0.5) }, true);
+  });
 }
 
 // Fill thin rosters with the best veterans they can afford late in the market (asks drop to ~70%),
@@ -1322,13 +1361,14 @@ function advance() {
       news('Preseason: get to ' + ROSTER_MAX + ' players before week 1.');
       break;
     case 'preseason':
-      aiFreeAgencyDay(); aiExtensions();
+      aiFreeAgencyDay(); aiLateMarket(); aiExtensions();
       aiFillRoster(ROSTER_MAX);
+      aiTeams().forEach(function (a) { cutdown(a); });
+      aiLateMarket();                          // second pass: cutdowns free room for anyone still unsigned
       aiTeams().forEach(function (a) { cutdown(a); });
       S.phase = 'season';                      // top-51 rule ends: every contract counts now
       aiTeams().forEach(function (a) { aiCapFix(a, 500); });
       aiPrepay(15000);
-      S.week1Space = sumBy(aiTeams().filter(function (a) { return a !== S.user; }), function (a) { return space(a); }) / 31;
       resetSeason();
       break;
     case 'season':
@@ -1412,6 +1452,7 @@ function makePick(k, p) {
   p.team = null;
   var yrs = Cap.buildContract(deal, S.year, 0);
   p.team = k.owner; p.years = yrs; p.apy = Cap.apy(yrs); p.gtdTotal = deal.gtd; p.signed = S.year;
+  p.mv = Market.initialMarketShare(p, k.no);
   S.draft.made.push({ no: k.no, round: k.round, team: k.owner, id: p.id });
   S.draft.i++;
   if (k.owner === S.user || k.round === 1) news('Pick ' + k.no + ': ' + k.owner + ' select ' + p.pos + ' ' + p.name + ' (' + p.college + ').', k.owner);
@@ -1537,18 +1578,6 @@ function endOfYear() {
   S.optTables = S.optTables || {};
   S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);
   var perf = performanceDeltas();
-  // market inflation: if teams sat on lots of unused room this year, next year's asking prices rise
-  if (S.week1Space != null && !S.freezePay) {
-    var slack = S.week1Space / capOf(Y) - 0.03;
-    // look ahead too: money already free next year (expiring deals) beyond a normal ~30% of the cap
-    var ai = aiTeams().filter(function (a) { return a !== S.user; });
-    var nextFree = sumBy(ai, function (a) { return space(a, Y + 1) + Cap.teamCommitted(S.players, T(a), Y) * 0; }) / ai.length + (sumBy(ai, function (a) { return Math.max(0, space(a, Y)); }) / ai.length);
-    slack = Math.max(slack, (nextFree / capOf(Y + 1) - 0.33) * 0.55);
-    var unsigned = freeAgents().filter(function (p) { return p.ovr >= 80; }).length;
-    if (unsigned > 8) slack = Math.min(slack, -0.06 * Math.min(3, unsigned / 8));
-    S.payScale = clamp(S.payScale * (1 + clamp(slack * 1.5, -0.06, 0.22)), 0.6, 2.5);
-    Market.setScale(S.payScale);
-  }
   // cap rollover into next league year
   TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
   var retired = [];
@@ -1561,6 +1590,7 @@ function endOfYear() {
       return;
     }
     progress(p, perf[p.id] || 0);
+    Market.driftMarketValue(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;
   });
   updateClassStrength();
@@ -1586,24 +1616,6 @@ function endOfYear() {
   var exp = S.players.filter(function (p) { return p.rights === S.user; }).length;
   news('The ' + S.year + ' league year begins. ' + exp + ' of your players have expiring contracts. Cap: ' + fmtM(capOf(S.year)) + ' (projected) plus ' + fmtM(S.teams[S.user].rollover[S.year] || 0) + ' rollover.');
 }
-// Market clearing for the new league year: compare the money teams have free with the fair value of
-// everyone who needs a contract (expired deals + free agents good enough to roster), and move the
-// league pay level toward the price that spends it.
-function clearMarket() {
-  var y = S.year;
-  var free = sumBy(TEAMS, function (t) { return Math.max(0, space(t.abbr, y)); });
-  var rostered = S.players.filter(function (p) { return p.team; }).length;
-  var openSlots = Math.max(0, 53 * 32 - rostered - 224);          // minus incoming draft class
-  var pool = S.players.filter(function (p) { return !p.team && !p.retired && !p.prospect; }).sort(byKey(function (p) { return p.ovr; }, true)).slice(0, openSlots);
-  var fair = sumBy(pool, function (p) { return Market.valueAt(p.pos, p.ovr, marketCap(), p.exp, y); });
-  var rookies = 32 * 12000 * capOf(y) / capOf(BASE.startYear);
-  var avail = free - rookies - 32 * 6000;                          // teams keep a little room
-  if (fair <= 0 || avail <= 0) return;
-  var ratio = clamp(avail / fair, 0.85, 1.2);
-  S.payScale = clamp(S.payScale * Math.pow(ratio, 0.7), 0.7, 2.2);
-  Market.setScale(S.payScale);
-}
-
 // League talent stays stable through the draft, not by editing existing players: every player's
 // rating moves only for aging and performance. Each offseason, positions with fewer 80+ players
 // than at the start get a stronger incoming class (and vice versa).
@@ -1684,6 +1696,7 @@ function renderStart() {
   var has = hasSave();
   $app().innerHTML = '<div class="start"><h1>NFL GM</h1><p class="muted">Real rosters and contracts (OverTheCap via nflverse). Ratings are derived from 2025–26 stats and snaps. Start in the ' + (window.DATA ? DATA.meta.startYear : 2027) + ' offseason.</p>' +
     '<p class="actions">' + (has ? '<button class="primary" data-act="continue">Continue saved game</button>' : '') + '<button data-act="import">Import save</button></p>' + importInput() +
+    '<p class="seedrow"><label>Seed <input id="seed" inputmode="numeric" placeholder="random" size="10"></label> <span class="muted small">Optional. The same seed and the same moves replay the same league.</span></p>' +
     '<h2>Pick a team</h2><div class="teamgrid">' + TEAMS.slice().sort(byKey(function (t) { return t.name; })).map(function (t) {
       return '<button class="teambtn' + (t.abbr === 'NE' ? ' pick' : '') + '" data-act="new" data-t="' + t.abbr + '">' + chip(t.abbr) + '<b>' + t.abbr + '</b><span>' + esc(t.name) + '</span></button>';
     }).join('') + '</div>' + (has ? '<p class="muted small">Starting a new game replaces your saved game.</p>' : '') + '</div>';
@@ -2018,7 +2031,7 @@ function onClick(e) {
   if (el.tagName === 'SELECT') return;
   var r;
   switch (a) {
-    case 'new': if (hasSave() && !confirm('Start a new game as ' + TEAM[d.t].name + '? This replaces your saved game.')) return; newGame(DATA, d.t); reindex(); Market.setScale(S.payScale); UI.view = 'hub'; UI.trade = null; break;
+    case 'new': if (hasSave() && !confirm('Start a new game as ' + TEAM[d.t].name + '? This replaces your saved game.')) return; var sd = document.getElementById('seed'); newGame(DATA, d.t, sd ? sd.value.trim() : null); reindex(); UI.view = 'hub'; UI.trade = null; break;
     case 'continue': loadGame(); break;
     case 'view': UI.view = d.v; UI.msg = null; UI.modal = null; window.scrollTo(0, 0); break;
     case 'advance': r = advance(); if (!r.ok) flash(r.msg, true); else UI.msg = null; if (S.phase === 'draft' && UI.view !== 'draft') UI.view = 'draft'; if (S.phase === 'preseason' && UI.view === 'draft') UI.view = 'roster'; break;
@@ -2121,7 +2134,7 @@ function importSave(file) {
       var o = JSON.parse(reader.result);
       if (o.app !== 'nfl-gm' || !o.S || !o.BASE || !o.S.players || !o.S.teams) throw new Error('not a save');
       if (S && !confirm('Load this save (' + o.S.user + ', ' + o.S.year + ')? It replaces the game in progress.')) return;
-      S = o.S; BASE = o.BASE; reindex(); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+      S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
       UI.view = 'hub'; UI.modal = null; UI.trade = null;
       flash('Save loaded: ' + TEAM[S.user].name + ', ' + S.year + '.');
       saveGame(); render();
@@ -2146,7 +2159,7 @@ function loadGame() {
     var raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
     var json = raw.slice(0, 3) === 'lz:' ? LZString.decompressFromUTF16(raw.slice(3)) : raw;
     var o = JSON.parse(json);
-    S = o.S; BASE = o.BASE; reindex(); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+    S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
     UI.view = 'hub';
     return true;
   } catch (e) { console.warn('load failed', e); return false; }

@@ -7,9 +7,10 @@ for (const f of fs.readdirSync(path.join(__dirname, '../src/js')).sort()) {
 }
 const data = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data.json'), 'utf8'));
 const seasons = +process.argv[2] || 3;
+const seedArg = process.argv.indexOf("--seed") > 0 ? +process.argv[process.argv.indexOf("--seed") + 1] : null;
 let fail = 0;
 const check = (l, c) => { if (!c) { fail++; console.log('  FAIL', l); } };
-vm.runInContext("newGame(DATA, \"NE\"); reindex(); S.autopilot = true; S.freezePay = FREEZE;", Object.assign(ctx, { DATA: data, FREEZE: process.argv[3] === "freeze" }));
+vm.runInContext("newGame(DATA, \"NE\", SEED); reindex(); S.autopilot = true;", Object.assign(ctx, { DATA: data, SEED: seedArg }));
 const t0 = Date.now();
 for (let s = 0; s < seasons; s++) {
   const out = vm.runInContext(`(function(){
@@ -21,10 +22,12 @@ for (let s = 0; s < seasons; s++) {
       var r = advance();
       if (!r.ok) { log.push('blocked: ' + r.msg); userAutoRoster(); aiCapFix(S.user, 6000); if (space(S.user) < 0) { var c = roster(S.user).sort(byKey(function(p){return -Cap.capHit(p,S.year)}))[0]; release(c,true);} }
       if (S.phase === 'season' && S.week === 1) {
+        if (freeAgents().some(function(p){return p.ovr>=80 && p.age<30})) log.push('CHECK unsigned young 80+');
+        if (TEAMS.some(function(t){return t.abbr !== S.user && space(t.abbr) < 0})) log.push('CHECK AI team over cap');
         log.push('rosters ' + TEAMS.map(function(t){return roster(t.abbr).length}).join(','));
         var over = TEAMS.filter(function(t){return space(t.abbr) < 0}).map(function(t){return t.abbr + ' ' + fmtM(space(t.abbr))});
         log.push('over cap: ' + (over.join('; ') || 'none'));
-        log.push('payScale ' + S.payScale.toFixed(2) + ' week 1 avg space ' + fmtM(sumBy(TEAMS,function(t){return space(t.abbr)})/32) + ', 80+ rostered ' + S.players.filter(function(p){return p.team && p.ovr>=80}).length + ', 80+ unsigned ' + freeAgents().filter(function(p){return p.ovr>=80}).length + ', 80+ total ' + S.players.filter(function(p){return !p.retired && !p.prospect && p.ovr>=80}).length + ' (start ' + sumBy(POSITIONS,function(q){return S.target80[q]}) + ')');
+        log.push('payScale ' + S.payScale.toFixed(2) + ' week 1 avg space ' + fmtM(sumBy(TEAMS,function(t){return space(t.abbr)})/32) + ', 80+ rostered ' + S.players.filter(function(p){return p.team && p.ovr>=80}).length + ', 80+ unsigned ' + freeAgents().filter(function(p){return p.ovr>=80}).length + ' (under 30: ' + freeAgents().filter(function(p){return p.ovr>=80 && p.age<30}).length + '), min team space ' + fmtM(Math.min.apply(null, TEAMS.map(function(t){return space(t.abbr)}))) + ', 80+ total ' + S.players.filter(function(p){return !p.retired && !p.prospect && p.ovr>=80}).length + ' (start ' + sumBy(POSITIONS,function(q){return S.target80[q]}) + ')');
       }
     }
     var h = S.history[S.history.length-1];
@@ -41,6 +44,8 @@ for (let s = 0; s < seasons; s++) {
   check('no NaN', !out.nan);
   check('rosters <= 90', out.rosterBad === 0);
   check('champion crowned', !!out.h.champ);
+  check('no unsigned 80+ players under 30 at week 1', !out.log.some(l => l === 'CHECK unsigned young 80+'));
+  check('every AI team under the cap at week 1', !out.log.some(l => l === 'CHECK AI team over cap'));
 }
 console.log(`${seasons} seasons in ${Date.now() - t0} ms; ${fail} failures`);
 process.exit(fail ? 1 : 0);

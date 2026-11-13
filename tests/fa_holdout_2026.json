@@ -1,0 +1,1964 @@
+[
+{
+"id": "00-0036934",
+"name": "Jaelan Phillips",
+"pos": "EDGE",
+"years": 4,
+"total": 120.0,
+"gtd": 60.0,
+"share": 0.0996
+},
+{
+"id": "00-0037664",
+"name": "Alec Pierce",
+"pos": "WR",
+"years": 4,
+"total": 114.0,
+"gtd": 60.0,
+"share": 0.09462
+},
+{
+"id": "00-0033935",
+"name": "Trey Hendrickson",
+"pos": "EDGE",
+"years": 4,
+"total": 112.0,
+"gtd": 60.0,
+"share": 0.09296
+},
+{
+"id": "00-0037825",
+"name": "Tyler Linderbaum",
+"pos": "IOL",
+"years": 3,
+"total": 81.0,
+"gtd": 60.0,
+"share": 0.08964
+},
+{
+"id": "00-0036940",
+"name": "Odafe Oweh",
+"pos": "EDGE",
+"years": 4,
+"total": 96.0,
+"gtd": 50.6,
+"share": 0.07968
+},
+{
+"id": "00-0023459",
+"name": "Aaron Rodgers",
+"pos": "QB",
+"years": 1,
+"total": 22.5,
+"gtd": 22.0,
+"share": 0.0747
+},
+{
+"id": "00-0038128",
+"name": "Malik Willis",
+"pos": "QB",
+"years": 3,
+"total": 67.5,
+"gtd": 45.0,
+"share": 0.0747
+},
+{
+"id": "00-0034805",
+"name": "John Franklin-Myers",
+"pos": "EDGE",
+"years": 3,
+"total": 63.0,
+"gtd": 42.0,
+"share": 0.06972
+},
+{
+"id": "00-0038133",
+"name": "Boye Mafe",
+"pos": "EDGE",
+"years": 3,
+"total": 60.0,
+"gtd": 19.0,
+"share": 0.0664
+},
+{
+"id": "00-0038121",
+"name": "Alontae Taylor",
+"pos": "CB",
+"years": 3,
+"total": 58.0,
+"gtd": 42.0,
+"share": 0.06419
+},
+{
+"id": "00-0031040",
+"name": "Khalil Mack",
+"pos": "EDGE",
+"years": 1,
+"total": 18.0,
+"gtd": 18.0,
+"share": 0.05976
+},
+{
+"id": "00-0038117",
+"name": "Wan'Dale Robinson",
+"pos": "WR",
+"years": 4,
+"total": 70.0,
+"gtd": 38.0,
+"share": 0.0581
+},
+{
+"id": "00-0037816",
+"name": "Romeo Doubs",
+"pos": "WR",
+"years": 4,
+"total": 68.0,
+"gtd": 35.0,
+"share": 0.05644
+},
+{
+"id": "00-0037545",
+"name": "Rashid Shaheed",
+"pos": "WR",
+"years": 3,
+"total": 51.0,
+"gtd": 23.0,
+"share": 0.05644
+},
+{
+"id": "00-0037195",
+"name": "Jaylen Watson",
+"pos": "CB",
+"years": 3,
+"total": 51.0,
+"gtd": 26.5,
+"share": 0.05644
+},
+{
+"id": "00-0037818",
+"name": "Zion Johnson",
+"pos": "IOL",
+"years": 3,
+"total": 49.5,
+"gtd": 32.39,
+"share": 0.05478
+},
+{
+"id": "00-0036479",
+"name": "Kwity Paye",
+"pos": "EDGE",
+"years": 3,
+"total": 48.0,
+"gtd": 25.738,
+"share": 0.05312
+},
+{
+"id": "00-0035668",
+"name": "David Edwards",
+"pos": "IOL",
+"years": 4,
+"total": 61.0,
+"gtd": 30.0,
+"share": 0.05063
+},
+{
+"id": "00-0037244",
+"name": "Devin Lloyd",
+"pos": "LB",
+"years": 3,
+"total": 45.0,
+"gtd": 25.0,
+"share": 0.0498
+},
+{
+"id": "00-0037758",
+"name": "Cordale Flott",
+"pos": "CB",
+"years": 3,
+"total": 45.0,
+"gtd": 32.0,
+"share": 0.0498
+},
+{
+"id": "00-0038134",
+"name": "Kenneth Walker III",
+"pos": "RB",
+"years": 3,
+"total": 43.05,
+"gtd": 28.7,
+"share": 0.04764
+},
+{
+"id": "00-0031408",
+"name": "Mike Evans",
+"pos": "WR",
+"years": 3,
+"total": 42.5,
+"gtd": 14.3,
+"share": 0.04703
+},
+{
+"id": "00-0036979",
+"name": "Alijah Vera-Tucker",
+"pos": "IOL",
+"years": 3,
+"total": 42.0,
+"gtd": 21.0,
+"share": 0.04648
+},
+{
+"id": "00-0037074",
+"name": "Quay Walker",
+"pos": "LB",
+"years": 3,
+"total": 40.5,
+"gtd": 28.0,
+"share": 0.04482
+},
+{
+"id": "00-0037193",
+"name": "Bryan Cook",
+"pos": "S",
+"years": 3,
+"total": 40.25,
+"gtd": 14.0,
+"share": 0.04454
+},
+{
+"id": "00-0037838",
+"name": "Isaiah Likely",
+"pos": "TE",
+"years": 3,
+"total": 40.0,
+"gtd": 20.5,
+"share": 0.04427
+},
+{
+"id": "00-0038136",
+"name": "Coby Bryant",
+"pos": "S",
+"years": 3,
+"total": 40.0,
+"gtd": 25.75,
+"share": 0.04427
+},
+{
+"id": "00-0035679",
+"name": "Connor McGovern",
+"pos": "IOL",
+"years": 4,
+"total": 52.4,
+"gtd": 26.2,
+"share": 0.04349
+},
+{
+"id": "00-0033290",
+"name": "Jermaine Eluemunor",
+"pos": "OT",
+"years": 3,
+"total": 39.0,
+"gtd": 25.45,
+"share": 0.04316
+},
+{
+"id": "00-0038131",
+"name": "Ed Ingram",
+"pos": "IOL",
+"years": 3,
+"total": 37.5,
+"gtd": 20.0,
+"share": 0.0415
+},
+{
+"id": "00-0035699",
+"name": "Jamel Dean",
+"pos": "CB",
+"years": 3,
+"total": 36.75,
+"gtd": 13.5,
+"share": 0.04067
+},
+{
+"id": "00-0035678",
+"name": "Dre'Mont Jones",
+"pos": "EDGE",
+"years": 3,
+"total": 36.5,
+"gtd": 23.28,
+"share": 0.04039
+},
+{
+"id": "00-0037615",
+"name": "Nakobe Dean",
+"pos": "LB",
+"years": 3,
+"total": 36.03,
+"gtd": 20.0,
+"share": 0.03987
+},
+{
+"id": "00-0036973",
+"name": "Travis Etienne",
+"pos": "RB",
+"years": 4,
+"total": 48.0,
+"gtd": 24.0,
+"share": 0.03984
+},
+{
+"id": "00-0030506",
+"name": "Travis Kelce",
+"pos": "TE",
+"years": 1,
+"total": 12.0,
+"gtd": 12.0,
+"share": 0.03984
+},
+{
+"id": "00-0037079",
+"name": "Tariq Woolen",
+"pos": "CB",
+"years": 1,
+"total": 12.0,
+"gtd": 12.0,
+"share": 0.03984
+},
+{
+"id": "00-0036349",
+"name": "Kamren Curl",
+"pos": "S",
+"years": 3,
+"total": 36.0,
+"gtd": 18.75,
+"share": 0.03984
+},
+{
+"id": "00-0037291",
+"name": "Jalen Nailor",
+"pos": "WR",
+"years": 3,
+"total": 35.03,
+"gtd": 18.0,
+"share": 0.03877
+},
+{
+"id": "00-0036902",
+"name": "Joseph Ossai",
+"pos": "EDGE",
+"years": 3,
+"total": 34.5,
+"gtd": 22.49,
+"share": 0.03818
+},
+{
+"id": "00-0036989",
+"name": "Malcolm Koonce",
+"pos": "EDGE",
+"years": 1,
+"total": 11.01,
+"gtd": 10.5,
+"share": 0.03655
+},
+{
+"id": "00-0037076",
+"name": "Sean Rhyan",
+"pos": "IOL",
+"years": 3,
+"total": 33.0,
+"gtd": 11.0,
+"share": 0.03652
+},
+{
+"id": "00-0036286",
+"name": "K'Lavon Chaisson",
+"pos": "EDGE",
+"years": 1,
+"total": 11.0,
+"gtd": 10.3,
+"share": 0.03652
+},
+{
+"id": "00-0035316",
+"name": "Kaden Elliss",
+"pos": "LB",
+"years": 3,
+"total": 33.0,
+"gtd": 23.0,
+"share": 0.03652
+},
+{
+"id": "00-0029607",
+"name": "Demario Davis",
+"pos": "LB",
+"years": 2,
+"total": 22.0,
+"gtd": 15.0,
+"share": 0.03652
+},
+{
+"id": "00-0035705",
+"name": "Jalen Thompson",
+"pos": "S",
+"years": 3,
+"total": 33.0,
+"gtd": 22.0,
+"share": 0.03652
+},
+{
+"id": "00-0037313",
+"name": "Montaric Brown",
+"pos": "CB",
+"years": 3,
+"total": 31.8,
+"gtd": 20.65,
+"share": 0.03519
+},
+{
+"id": "00-0032954",
+"name": "Isaac Seumalo",
+"pos": "IOL",
+"years": 3,
+"total": 31.5,
+"gtd": 15.0,
+"share": 0.03486
+},
+{
+"id": "00-0033051",
+"name": "David Onyemata",
+"pos": "DL",
+"years": 1,
+"total": 10.5,
+"gtd": 9.65,
+"share": 0.03486
+},
+{
+"id": "00-0038129",
+"name": "Cade Otton",
+"pos": "TE",
+"years": 3,
+"total": 30.0,
+"gtd": 20.0,
+"share": 0.0332
+},
+{
+"id": "00-0036369",
+"name": "John Simpson",
+"pos": "IOL",
+"years": 3,
+"total": 30.0,
+"gtd": 17.5,
+"share": 0.0332
+},
+{
+"id": "00-0034836",
+"name": "Braden Smith",
+"pos": "OT",
+"years": 2,
+"total": 20.0,
+"gtd": 13.5,
+"share": 0.0332
+},
+{
+"id": "00-0036181",
+"name": "Teair Tart",
+"pos": "DL",
+"years": 3,
+"total": 30.0,
+"gtd": 15.0,
+"share": 0.0332
+},
+{
+"id": "00-0035525",
+"name": "Devin Bush",
+"pos": "LB",
+"years": 3,
+"total": 30.0,
+"gtd": 21.0,
+"share": 0.0332
+},
+{
+"id": "00-0036901",
+"name": "Eric Stokes",
+"pos": "CB",
+"years": 3,
+"total": 30.0,
+"gtd": 20.0,
+"share": 0.0332
+},
+{
+"id": "00-0037809",
+"name": "Chigoziem Okonkwo",
+"pos": "TE",
+"years": 3,
+"total": 27.0,
+"gtd": 16.7,
+"share": 0.02988
+},
+{
+"id": "00-0037083",
+"name": "Kingsley Enagbare",
+"pos": "EDGE",
+"years": 1,
+"total": 9.0,
+"gtd": 8.49,
+"share": 0.02988
+},
+{
+"id": "00-0034163",
+"name": "Jacob Martin",
+"pos": "EDGE",
+"years": 1,
+"total": 9.0,
+"gtd": 4.5,
+"share": 0.02988
+},
+{
+"id": "00-0032759",
+"name": "Sheldon Rankins",
+"pos": "DL",
+"years": 2,
+"total": 17.0,
+"gtd": 12.0,
+"share": 0.02822
+},
+{
+"id": "00-0033914",
+"name": "Alex Anzalone",
+"pos": "LB",
+"years": 2,
+"total": 17.0,
+"gtd": 12.0,
+"share": 0.02822
+},
+{
+"id": "00-0037297",
+"name": "Cade Mays",
+"pos": "IOL",
+"years": 3,
+"total": 25.0,
+"gtd": 14.0,
+"share": 0.02767
+},
+{
+"id": "00-0037819",
+"name": "Leo Chenal",
+"pos": "LB",
+"years": 3,
+"total": 24.75,
+"gtd": 12.4,
+"share": 0.02739
+},
+{
+"id": "00-0037130",
+"name": "Reed Blankenship",
+"pos": "S",
+"years": 3,
+"total": 24.75,
+"gtd": 16.5,
+"share": 0.02739
+},
+{
+"id": "00-0038046",
+"name": "Charlie Kolar",
+"pos": "TE",
+"years": 3,
+"total": 24.3,
+"gtd": 17.0,
+"share": 0.02689
+},
+{
+"id": "00-0036997",
+"name": "Javonte Williams",
+"pos": "RB",
+"years": 3,
+"total": 24.0,
+"gtd": 16.0,
+"share": 0.02656
+},
+{
+"id": "00-0036158",
+"name": "J.K. Dobbins",
+"pos": "RB",
+"years": 2,
+"total": 16.0,
+"gtd": 0.0,
+"share": 0.02656
+},
+{
+"id": "00-0037255",
+"name": "Dylan Parham",
+"pos": "IOL",
+"years": 2,
+"total": 16.0,
+"gtd": 7.49,
+"share": 0.02656
+},
+{
+"id": "00-0034397",
+"name": "Tim Settle",
+"pos": "DL",
+"years": 3,
+"total": 24.0,
+"gtd": 7.3,
+"share": 0.02656
+},
+{
+"id": "00-0034825",
+"name": "Arden Key",
+"pos": "EDGE",
+"years": 2,
+"total": 16.0,
+"gtd": 11.0,
+"share": 0.02656
+},
+{
+"id": "00-0036996",
+"name": "Greg Newsome II",
+"pos": "CB",
+"years": 1,
+"total": 8.0,
+"gtd": 3.0,
+"share": 0.02656
+},
+{
+"id": "00-0037137",
+"name": "Josh Jobe",
+"pos": "CB",
+"years": 3,
+"total": 24.0,
+"gtd": 9.5,
+"share": 0.02656
+},
+{
+"id": "00-0036380",
+"name": "Alohi Gilman",
+"pos": "S",
+"years": 3,
+"total": 24.0,
+"gtd": 15.0,
+"share": 0.02656
+},
+{
+"id": "00-0036375",
+"name": "Amik Robertson",
+"pos": "CB",
+"years": 2,
+"total": 15.02,
+"gtd": 7.35,
+"share": 0.02493
+},
+{
+"id": "00-0037741",
+"name": "Jahan Dotson",
+"pos": "WR",
+"years": 2,
+"total": 15.0,
+"gtd": 10.0,
+"share": 0.0249
+},
+{
+"id": "00-0031898",
+"name": "Alex Singleton",
+"pos": "LB",
+"years": 2,
+"total": 15.0,
+"gtd": 11.0,
+"share": 0.0249
+},
+{
+"id": "00-0033336",
+"name": "Eric Wilson",
+"pos": "LB",
+"years": 3,
+"total": 22.5,
+"gtd": 12.5,
+"share": 0.0249
+},
+{
+"id": "00-0032268",
+"name": "Marcus Mariota",
+"pos": "QB",
+"years": 1,
+"total": 7.0,
+"gtd": 6.39,
+"share": 0.02324
+},
+{
+"id": "00-0036919",
+"name": "Kenneth Gainwell",
+"pos": "RB",
+"years": 2,
+"total": 14.0,
+"gtd": 9.83,
+"share": 0.02324
+},
+{
+"id": "00-0038115",
+"name": "Daniel Bellinger",
+"pos": "TE",
+"years": 3,
+"total": 21.0,
+"gtd": 14.01,
+"share": 0.02324
+},
+{
+"id": "00-0036909",
+"name": "Khyiris Tonga",
+"pos": "DL",
+"years": 3,
+"total": 21.0,
+"gtd": 14.0,
+"share": 0.02324
+},
+{
+"id": "00-0033132",
+"name": "Kevin Byard",
+"pos": "S",
+"years": 1,
+"total": 7.0,
+"gtd": 6.17,
+"share": 0.02324
+},
+{
+"id": "00-0038127",
+"name": "Logan Hall",
+"pos": "DL",
+"years": 2,
+"total": 13.75,
+"gtd": 9.0,
+"share": 0.02283
+},
+{
+"id": "00-0038103",
+"name": "Cole Strange",
+"pos": "IOL",
+"years": 2,
+"total": 13.0,
+"gtd": 7.0,
+"share": 0.02158
+},
+{
+"id": "00-0035680",
+"name": "Quincy Williams",
+"pos": "LB",
+"years": 2,
+"total": 13.0,
+"gtd": 9.0,
+"share": 0.02158
+},
+{
+"id": "00-0037616",
+"name": "Nick Cross",
+"pos": "S",
+"years": 2,
+"total": 13.0,
+"gtd": 6.05,
+"share": 0.02158
+},
+{
+"id": "00-0037263",
+"name": "Tyler Allgeier",
+"pos": "RB",
+"years": 2,
+"total": 12.25,
+"gtd": 8.0,
+"share": 0.02034
+},
+{
+"id": "00-0036139",
+"name": "Rico Dowdle",
+"pos": "RB",
+"years": 2,
+"total": 12.25,
+"gtd": 5.0,
+"share": 0.02034
+},
+{
+"id": "00-0026158",
+"name": "Joe Flacco",
+"pos": "QB",
+"years": 1,
+"total": 6.0,
+"gtd": 4.0,
+"share": 0.01992
+},
+{
+"id": "00-0036428",
+"name": "Justin Strnad",
+"pos": "LB",
+"years": 3,
+"total": 18.0,
+"gtd": 10.0,
+"share": 0.01992
+},
+{
+"id": "00-0035289",
+"name": "Gardner Minshew",
+"pos": "QB",
+"years": 1,
+"total": 5.75,
+"gtd": 5.14,
+"share": 0.01909
+},
+{
+"id": "00-0036422",
+"name": "Adam Trautman",
+"pos": "TE",
+"years": 3,
+"total": 17.0,
+"gtd": 9.5,
+"share": 0.01881
+},
+{
+"id": "00-0038107",
+"name": "Micheal Clemons",
+"pos": "EDGE",
+"years": 3,
+"total": 17.0,
+"gtd": 5.99,
+"share": 0.01881
+},
+{
+"id": "00-0038104",
+"name": "Tyquan Thornton",
+"pos": "WR",
+"years": 2,
+"total": 11.0,
+"gtd": 7.4,
+"share": 0.01826
+},
+{
+"id": "00-0032071",
+"name": "Trent Brown",
+"pos": "OT",
+"years": 1,
+"total": 5.5,
+"gtd": 1.75,
+"share": 0.01826
+},
+{
+"id": "00-0034810",
+"name": "Sebastian Joseph-Day",
+"pos": "DL",
+"years": 2,
+"total": 11.0,
+"gtd": 4.7,
+"share": 0.01826
+},
+{
+"id": "00-0027940",
+"name": "Von Miller",
+"pos": "EDGE",
+"years": 1,
+"total": 5.5,
+"gtd": 3.0,
+"share": 0.01826
+},
+{
+"id": "00-0038135",
+"name": "Jaquan Brisker",
+"pos": "S",
+"years": 1,
+"total": 5.5,
+"gtd": 4.285,
+"share": 0.01826
+},
+{
+"id": "00-0033869",
+"name": "Mitchell Trubisky",
+"pos": "QB",
+"years": 2,
+"total": 10.5,
+"gtd": 6.825,
+"share": 0.01743
+},
+{
+"id": "00-0036568",
+"name": "Roy Lopez",
+"pos": "DL",
+"years": 2,
+"total": 10.5,
+"gtd": 6.0,
+"share": 0.01743
+},
+{
+"id": "00-0037034",
+"name": "Dee Alford",
+"pos": "CB",
+"years": 3,
+"total": 15.75,
+"gtd": 7.875,
+"share": 0.01743
+},
+{
+"id": "00-0033307",
+"name": "Kendrick Bourne",
+"pos": "WR",
+"years": 2,
+"total": 10.0,
+"gtd": 6.5,
+"share": 0.0166
+},
+{
+"id": "00-0035662",
+"name": "Marquise Brown",
+"pos": "WR",
+"years": 1,
+"total": 5.0,
+"gtd": 5.0,
+"share": 0.0166
+},
+{
+"id": "00-0037081",
+"name": "Braxton Jones",
+"pos": "OT",
+"years": 1,
+"total": 5.0,
+"gtd": 3.0,
+"share": 0.0166
+},
+{
+"id": "00-0035688",
+"name": "Trey Pipkins",
+"pos": "OT",
+"years": 2,
+"total": 10.0,
+"gtd": 4.575,
+"share": 0.0166
+},
+{
+"id": "00-0036905",
+"name": "Larry Borom",
+"pos": "OT",
+"years": 1,
+"total": 5.0,
+"gtd": 4.9,
+"share": 0.0166
+},
+{
+"id": "00-0036366",
+"name": "Neville Gallimore",
+"pos": "DL",
+"years": 2,
+"total": 10.0,
+"gtd": 5.0,
+"share": 0.0166
+},
+{
+"id": "00-0034987",
+"name": "E.J. Speed",
+"pos": "LB",
+"years": 2,
+"total": 10.0,
+"gtd": 7.5,
+"share": 0.0166
+},
+{
+"id": "00-0036625",
+"name": "Benjamin St-Juste",
+"pos": "CB",
+"years": 2,
+"total": 10.0,
+"gtd": 3.0,
+"share": 0.0166
+},
+{
+"id": "00-0033548",
+"name": "Chidobe Awuzie",
+"pos": "CB",
+"years": 1,
+"total": 5.0,
+"gtd": 5.0,
+"share": 0.0166
+},
+{
+"id": "00-0036302",
+"name": "Jaylinn Hawkins",
+"pos": "S",
+"years": 2,
+"total": 10.0,
+"gtd": 5.0,
+"share": 0.0166
+},
+{
+"id": "00-0037287",
+"name": "Vederian Lowe",
+"pos": "OT",
+"years": 2,
+"total": 9.25,
+"gtd": 5.75,
+"share": 0.01536
+},
+{
+"id": "00-0025565",
+"name": "Nick Folk",
+"pos": "K",
+"years": 2,
+"total": 9.0,
+"gtd": 4.0,
+"share": 0.01494
+},
+{
+"id": "00-0035644",
+"name": "Noah Fant",
+"pos": "TE",
+"years": 2,
+"total": 8.75,
+"gtd": 4.5,
+"share": 0.01453
+},
+{
+"id": "00-0038116",
+"name": "Arnold Ebiketie",
+"pos": "EDGE",
+"years": 1,
+"total": 4.3,
+"gtd": 4.3,
+"share": 0.01428
+},
+{
+"id": "00-0035795",
+"name": "James Pierre",
+"pos": "CB",
+"years": 2,
+"total": 8.5,
+"gtd": 3.715,
+"share": 0.01411
+},
+{
+"id": "00-0034173",
+"name": "Eddy Pineiro",
+"pos": "K",
+"years": 4,
+"total": 17.0,
+"gtd": 8.0,
+"share": 0.01411
+},
+{
+"id": "00-0038094",
+"name": "Jordan Stout",
+"pos": "P",
+"years": 3,
+"total": 12.3,
+"gtd": 6.32,
+"share": 0.01361
+},
+{
+"id": "00-0038102",
+"name": "Kenny Pickett",
+"pos": "QB",
+"years": 1,
+"total": 4.0,
+"gtd": 4.0,
+"share": 0.01328
+},
+{
+"id": "00-0037196",
+"name": "Rasheed Walker",
+"pos": "OT",
+"years": 1,
+"total": 4.0,
+"gtd": 3.215,
+"share": 0.01328
+},
+{
+"id": "00-0036363",
+"name": "Josh Jones",
+"pos": "OT",
+"years": 1,
+"total": 4.0,
+"gtd": 3.0,
+"share": 0.01328
+},
+{
+"id": "00-0036953",
+"name": "Teven Jenkins",
+"pos": "IOL",
+"years": 1,
+"total": 4.0,
+"gtd": 3.96,
+"share": 0.01328
+},
+{
+"id": "00-0033964",
+"name": "Al-Quadin Muhammad",
+"pos": "EDGE",
+"years": 1,
+"total": 4.0,
+"gtd": 2.5,
+"share": 0.01328
+},
+{
+"id": "00-0035279",
+"name": "Charles Omenihu",
+"pos": "EDGE",
+"years": 1,
+"total": 4.0,
+"gtd": 3.3,
+"share": 0.01328
+},
+{
+"id": "00-0038922",
+"name": "Drake Thomas",
+"pos": "LB",
+"years": 2,
+"total": 8.0,
+"gtd": 3.0,
+"share": 0.01328
+},
+{
+"id": "00-0038043",
+"name": "Joshua Williams",
+"pos": "CB",
+"years": 2,
+"total": 8.0,
+"gtd": 3.24,
+"share": 0.01328
+},
+{
+"id": "00-0036617",
+"name": "Asante Samuel Jr.",
+"pos": "CB",
+"years": 1,
+"total": 4.0,
+"gtd": 2.785,
+"share": 0.01328
+},
+{
+"id": "00-0037839",
+"name": "Cobie Durant",
+"pos": "CB",
+"years": 1,
+"total": 4.0,
+"gtd": 1.5,
+"share": 0.01328
+},
+{
+"id": "00-0035227",
+"name": "P.J. Locke",
+"pos": "S",
+"years": 1,
+"total": 4.0,
+"gtd": 3.5,
+"share": 0.01328
+},
+{
+"id": "00-0038123",
+"name": "Dane Belton",
+"pos": "S",
+"years": 1,
+"total": 4.0,
+"gtd": 2.0,
+"share": 0.01328
+},
+{
+"id": "00-0033376",
+"name": "Patrick Ricard",
+"pos": "RB",
+"years": 2,
+"total": 7.63,
+"gtd": 3.54,
+"share": 0.01267
+},
+{
+"id": "00-0033831",
+"name": "Andrew Wylie",
+"pos": "OT",
+"years": 2,
+"total": 7.5,
+"gtd": 3.7,
+"share": 0.01245
+},
+{
+"id": "00-0037259",
+"name": "Micah McFadden",
+"pos": "LB",
+"years": 1,
+"total": 3.75,
+"gtd": 2.9,
+"share": 0.01245
+},
+{
+"id": "00-0035202",
+"name": "Del'Shawn Phillips",
+"pos": "LB",
+"years": 2,
+"total": 7.5,
+"gtd": 4.0,
+"share": 0.01245
+},
+{
+"id": "00-0037271",
+"name": "D'Marco Jackson",
+"pos": "LB",
+"years": 2,
+"total": 7.5,
+"gtd": 3.625,
+"share": 0.01245
+},
+{
+"id": "00-0036187",
+"name": "Reggie Gilliam",
+"pos": "RB",
+"years": 3,
+"total": 10.8,
+"gtd": 6.0,
+"share": 0.01195
+},
+{
+"id": "00-0032464",
+"name": "Kalif Raymond",
+"pos": "WR",
+"years": 1,
+"total": 3.5,
+"gtd": 3.0,
+"share": 0.01162
+},
+{
+"id": "00-0037241",
+"name": "Trevor Penning",
+"pos": "OT",
+"years": 1,
+"total": 3.5,
+"gtd": 3.5,
+"share": 0.01162
+},
+{
+"id": "00-0034112",
+"name": "Austin Schlottmann",
+"pos": "IOL",
+"years": 2,
+"total": 7.0,
+"gtd": 2.99,
+"share": 0.01162
+},
+{
+"id": "00-0036619",
+"name": "Dillon Radunz",
+"pos": "OT",
+"years": 2,
+"total": 7.0,
+"gtd": 4.2,
+"share": 0.01162
+},
+{
+"id": "00-0036986",
+"name": "Nahshon Wright",
+"pos": "CB",
+"years": 1,
+"total": 3.5,
+"gtd": 3.5,
+"share": 0.01162
+},
+{
+"id": "00-0036313",
+"name": "Braden Mann",
+"pos": "P",
+"years": 4,
+"total": 14.0,
+"gtd": 7.0,
+"share": 0.01162
+},
+{
+"id": "00-0037500",
+"name": "Ryan Wright",
+"pos": "P",
+"years": 4,
+"total": 14.0,
+"gtd": 7.0,
+"share": 0.01162
+},
+{
+"id": "00-0030279",
+"name": "Keenan Allen",
+"pos": "WR",
+"years": 1,
+"total": 3.32,
+"gtd": 2.81,
+"share": 0.01102
+},
+{
+"id": "00-0037829",
+"name": "Spencer Burford",
+"pos": "IOL",
+"years": 1,
+"total": 3.255,
+"gtd": 2.745,
+"share": 0.01081
+},
+{
+"id": "00-0032392",
+"name": "Austin Hooper",
+"pos": "TE",
+"years": 1,
+"total": 3.25,
+"gtd": 2.74,
+"share": 0.01079
+},
+{
+"id": "00-0037252",
+"name": "Greg Dulcich",
+"pos": "TE",
+"years": 1,
+"total": 3.25,
+"gtd": 2.91,
+"share": 0.01079
+},
+{
+"id": "00-0035702",
+"name": "Dalton Risner",
+"pos": "IOL",
+"years": 1,
+"total": 3.25,
+"gtd": 1.0,
+"share": 0.01079
+},
+{
+"id": "00-0034473",
+"name": "Dennis Gardeck",
+"pos": "LB",
+"years": 2,
+"total": 6.5,
+"gtd": 3.15,
+"share": 0.01079
+},
+{
+"id": "00-0035637",
+"name": "Rock Ya-Sin",
+"pos": "CB",
+"years": 1,
+"total": 3.2,
+"gtd": 2.64,
+"share": 0.01062
+},
+{
+"id": "00-0034981",
+"name": "Foster Moreau",
+"pos": "TE",
+"years": 2,
+"total": 6.3,
+"gtd": 3.0,
+"share": 0.01046
+},
+{
+"id": "00-0033676",
+"name": "Elijah Wilkinson",
+"pos": "IOL",
+"years": 2,
+"total": 6.25,
+"gtd": 3.08,
+"share": 0.01038
+},
+{
+"id": "00-0037815",
+"name": "Cameron Thomas",
+"pos": "EDGE",
+"years": 1,
+"total": 3.095,
+"gtd": 2.5,
+"share": 0.01028
+},
+{
+"id": "00-0030140",
+"name": "Tress Way",
+"pos": "P",
+"years": 1,
+"total": 3.0375,
+"gtd": 3.0125,
+"share": 0.01008
+},
+{
+"id": "00-0032950",
+"name": "Carson Wentz",
+"pos": "QB",
+"years": 1,
+"total": 3.0,
+"gtd": 2.645,
+"share": 0.00996
+},
+{
+"id": "00-0034775",
+"name": "Christian Kirk",
+"pos": "WR",
+"years": 1,
+"total": 3.0,
+"gtd": 2.78,
+"share": 0.00996
+},
+{
+"id": "00-0034798",
+"name": "Durham Smythe",
+"pos": "TE",
+"years": 1,
+"total": 3.0,
+"gtd": 2.0,
+"share": 0.00996
+},
+{
+"id": "00-0033110",
+"name": "Tyler Higbee",
+"pos": "TE",
+"years": 2,
+"total": 6.0,
+"gtd": 4.0,
+"share": 0.00996
+},
+{
+"id": "00-0037092",
+"name": "Chris Paul",
+"pos": "IOL",
+"years": 1,
+"total": 3.0,
+"gtd": 2.475,
+"share": 0.00996
+},
+{
+"id": "00-0034371",
+"name": "Da'Shawn Hand",
+"pos": "EDGE",
+"years": 1,
+"total": 3.0,
+"gtd": 1.5,
+"share": 0.00996
+},
+{
+"id": "00-0036335",
+"name": "D.J. Wonnum",
+"pos": "EDGE",
+"years": 1,
+"total": 3.0,
+"gtd": 2.27,
+"share": 0.00996
+},
+{
+"id": "00-0037082",
+"name": "Dominique Robinson",
+"pos": "EDGE",
+"years": 1,
+"total": 3.0,
+"gtd": 1.5,
+"share": 0.00996
+},
+{
+"id": "00-0035357",
+"name": "Cameron Lewis",
+"pos": "CB",
+"years": 2,
+"total": 6.0,
+"gtd": 2.75,
+"share": 0.00996
+},
+{
+"id": "00-0036587",
+"name": "Ar'Darius Washington",
+"pos": "S",
+"years": 1,
+"total": 3.0,
+"gtd": 1.5,
+"share": 0.00996
+},
+{
+"id": "00-0035378",
+"name": "Andrew Wingard",
+"pos": "S",
+"years": 1,
+"total": 3.0,
+"gtd": 1.85,
+"share": 0.00996
+},
+{
+"id": "00-0035280",
+"name": "Jake Bailey",
+"pos": "P",
+"years": 3,
+"total": 9.0,
+"gtd": 5.0,
+"share": 0.00996
+},
+{
+"id": "00-0037283",
+"name": "John Ridgeway",
+"pos": "DL",
+"years": 2,
+"total": 5.715,
+"gtd": 1.65,
+"share": 0.00949
+},
+{
+"id": "00-0032103",
+"name": "Denzel Perryman",
+"pos": "LB",
+"years": 1,
+"total": 2.79,
+"gtd": 0.5,
+"share": 0.00926
+},
+{
+"id": "00-0033945",
+"name": "Samson Ebukam",
+"pos": "EDGE",
+"years": 1,
+"total": 2.765,
+"gtd": 0.7,
+"share": 0.00918
+},
+{
+"id": "00-0028986",
+"name": "Case Keenum",
+"pos": "QB",
+"years": 2,
+"total": 5.5,
+"gtd": 2.9,
+"share": 0.00913
+},
+{
+"id": "00-0036215",
+"name": "Danny Pinter",
+"pos": "IOL",
+"years": 1,
+"total": 2.75,
+"gtd": 1.5,
+"share": 0.00913
+},
+{
+"id": "00-0037814",
+"name": "Luke Fortner",
+"pos": "IOL",
+"years": 1,
+"total": 2.75,
+"gtd": 1.325,
+"share": 0.00913
+},
+{
+"id": "00-0037194",
+"name": "Darian Kinnard",
+"pos": "OT",
+"years": 1,
+"total": 2.75,
+"gtd": 1.0,
+"share": 0.00913
+},
+{
+"id": "00-0037270",
+"name": "Otito Ogbonnia",
+"pos": "DL",
+"years": 1,
+"total": 2.75,
+"gtd": 2.0,
+"share": 0.00913
+},
+{
+"id": "00-0037289",
+"name": "Malcolm Rodriguez",
+"pos": "LB",
+"years": 1,
+"total": 2.75,
+"gtd": 2.7,
+"share": 0.00913
+},
+{
+"id": "00-0037823",
+"name": "Christian Harris",
+"pos": "LB",
+"years": 1,
+"total": 2.75,
+"gtd": 1.985,
+"share": 0.00913
+},
+{
+"id": "00-0034355",
+"name": "M.J. Stewart",
+"pos": "S",
+"years": 1,
+"total": 2.7,
+"gtd": 0.5,
+"share": 0.00896
+},
+{
+"id": "00-0033217",
+"name": "Mo Alie-Cox",
+"pos": "TE",
+"years": 1,
+"total": 2.6875,
+"gtd": 2.1875,
+"share": 0.00892
+},
+{
+"id": "00-0037096",
+"name": "Elijah Hicks",
+"pos": "S",
+"years": 1,
+"total": 2.6,
+"gtd": 1.6875,
+"share": 0.00863
+},
+{
+"id": "00-0036253",
+"name": "Julian Blackmon",
+"pos": "S",
+"years": 1,
+"total": 2.535,
+"gtd": 1.0,
+"share": 0.00842
+},
+{
+"id": "00-0035993",
+"name": "Tyler Huntley",
+"pos": "QB",
+"years": 2,
+"total": 5.0,
+"gtd": 3.5,
+"share": 0.0083
+},
+{
+"id": "00-0037077",
+"name": "Sam Howell",
+"pos": "QB",
+"years": 1,
+"total": 2.5,
+"gtd": 2.5,
+"share": 0.0083
+},
+{
+"id": "00-0037012",
+"name": "Trey Lance",
+"pos": "QB",
+"years": 1,
+"total": 2.5,
+"gtd": 2.0,
+"share": 0.0083
+},
+{
+"id": "00-0037746",
+"name": "Brian Robinson Jr.",
+"pos": "RB",
+"years": 1,
+"total": 2.5,
+"gtd": 0.775,
+"share": 0.0083
+},
+{
+"id": "00-0038090",
+"name": "Skyy Moore",
+"pos": "WR",
+"years": 1,
+"total": 2.5,
+"gtd": 1.0,
+"share": 0.0083
+},
+{
+"id": "00-0033066",
+"name": "Andrew Billings",
+"pos": "DL",
+"years": 1,
+"total": 2.5,
+"gtd": 0.7,
+"share": 0.0083
+},
+{
+"id": "00-0037665",
+"name": "Sam Williams",
+"pos": "EDGE",
+"years": 1,
+"total": 2.5,
+"gtd": 2.0,
+"share": 0.0083
+},
+{
+"id": "00-0035286",
+"name": "Cole Holcomb",
+"pos": "LB",
+"years": 2,
+"total": 5.0,
+"gtd": 0.625,
+"share": 0.0083
+},
+{
+"id": "00-0035413",
+"name": "Luke Gifford",
+"pos": "LB",
+"years": 2,
+"total": 5.0,
+"gtd": 2.01,
+"share": 0.0083
+},
+{
+"id": "00-0036941",
+"name": "Andre Cisco",
+"pos": "S",
+"years": 1,
+"total": 2.5,
+"gtd": 1.25,
+"share": 0.0083
+},
+{
+"id": "00-0035889",
+"name": "Tommy Townsend",
+"pos": "P",
+"years": 2,
+"total": 5.0,
+"gtd": 2.0,
+"share": 0.0083
+},
+{
+"id": "00-0037633",
+"name": "Jake Hummel",
+"pos": "LB",
+"years": 2,
+"total": 4.75,
+"gtd": 2.15,
+"share": 0.00789
+},
+{
+"id": "00-0037742",
+"name": "Treylon Burks",
+"pos": "WR",
+"years": 1,
+"total": 2.35,
+"gtd": 0.4,
+"share": 0.0078
+},
+{
+"id": "00-0036037",
+"name": "Sam Franklin",
+"pos": "S",
+"years": 3,
+"total": 7.0,
+"gtd": 2.53,
+"share": 0.00775
+},
+{
+"id": "00-0034488",
+"name": "Tavierre Thomas",
+"pos": "CB",
+"years": 2,
+"total": 4.6,
+"gtd": 1.95,
+"share": 0.00764
+},
+{
+"id": "00-0037304",
+"name": "Connor Heyward",
+"pos": "RB",
+"years": 2,
+"total": 4.5,
+"gtd": 2.0,
+"share": 0.00747
+},
+{
+"id": "00-0035208",
+"name": "Olamide Zaccheaus",
+"pos": "WR",
+"years": 2,
+"total": 4.5,
+"gtd": 2.3,
+"share": 0.00747
+},
+{
+"id": "00-0037292",
+"name": "Andrew Ogletree",
+"pos": "TE",
+"years": 1,
+"total": 2.25,
+"gtd": 1.5,
+"share": 0.00747
+},
+{
+"id": "00-0036648",
+"name": "Nick Niemann",
+"pos": "LB",
+"years": 1,
+"total": 2.25,
+"gtd": 0.5,
+"share": 0.00747
+},
+{
+"id": "00-0036672",
+"name": "Grant Stuard",
+"pos": "LB",
+"years": 2,
+"total": 4.45,
+"gtd": 1.8,
+"share": 0.00739
+},
+{
+"id": "00-0037155",
+"name": "Tony Adams",
+"pos": "S",
+"years": 1,
+"total": 2.14,
+"gtd": 1.0,
+"share": 0.0071
+},
+{
+"id": "00-0034951",
+"name": "Fred Johnson",
+"pos": "IOL",
+"years": 1,
+"total": 2.1,
+"gtd": 0.8,
+"share": 0.00697
+},
+{
+"id": "00-0034577",
+"name": "Kyle Allen",
+"pos": "QB",
+"years": 2,
+"total": 4.1,
+"gtd": 1.8,
+"share": 0.00681
+},
+{
+"id": "00-0036879",
+"name": "Sam Ehlinger",
+"pos": "QB",
+"years": 1,
+"total": 2.0,
+"gtd": 1.0,
+"share": 0.00664
+},
+{
+"id": "00-0037256",
+"name": "Rachaad White",
+"pos": "RB",
+"years": 1,
+"total": 2.0,
+"gtd": 1.715,
+"share": 0.00664
+},
+{
+"id": "00-0036842",
+"name": "Kene Nwangwu",
+"pos": "RB",
+"years": 1,
+"total": 2.0,
+"gtd": 1.0,
+"share": 0.00664
+},
+{
+"id": "00-0036590",
+"name": "Quintin Morris",
+"pos": "TE",
+"years": 1,
+"total": 2.0,
+"gtd": 1.7,
+"share": 0.00664
+},
+{
+"id": "00-0037086",
+"name": "Grant Calcaterra",
+"pos": "TE",
+"years": 1,
+"total": 2.0,
+"gtd": 0.7,
+"share": 0.00664
+},
+{
+"id": "00-0036653",
+"name": "Stone Forsythe",
+"pos": "OT",
+"years": 1,
+"total": 2.0,
+"gtd": 1.05,
+"share": 0.00664
+},
+{
+"id": "00-0038114",
+"name": "Max Mitchell",
+"pos": "IOL",
+"years": 1,
+"total": 2.0,
+"gtd": 1.0,
+"share": 0.00664
+},
+{
+"id": "00-0036736",
+"name": "Kayode Awosika",
+"pos": "OT",
+"years": 1,
+"total": 2.0,
+"gtd": 0.3,
+"share": 0.00664
+},
+{
+"id": "00-0033093",
+"name": "Jonathan Bullard",
+"pos": "DL",
+"years": 1,
+"total": 2.0,
+"gtd": 1.5,
+"share": 0.00664
+},
+{
+"id": "00-0036695",
+"name": "Naquan Jones",
+"pos": "DL",
+"years": 1,
+"total": 2.0,
+"gtd": 0.3,
+"share": 0.00664
+},
+{
+"id": "00-0036867",
+"name": "Chris Rumph II",
+"pos": "EDGE",
+"years": 1,
+"total": 2.0,
+"gtd": 2.0,
+"share": 0.00664
+},
+{
+"id": "00-0035636",
+"name": "L.J. Collier",
+"pos": "EDGE",
+"years": 1,
+"total": 2.0,
+"gtd": 0.75,
+"share": 0.00664
+},
+{
+"id": "00-0037320",
+"name": "Deane Leonard",
+"pos": "CB",
+"years": 1,
+"total": 2.0,
+"gtd": 1.215,
+"share": 0.00664
+},
+{
+"id": "00-0032580",
+"name": "Jonathan Jones",
+"pos": "CB",
+"years": 1,
+"total": 2.0,
+"gtd": 2.0,
+"share": 0.00664
+},
+{
+"id": "00-0035669",
+"name": "Nick Scott",
+"pos": "S",
+"years": 1,
+"total": 2.0,
+"gtd": 1.1,
+"share": 0.00664
+},
+{
+"id": "00-0035192",
+"name": "Joey Slye",
+"pos": "K",
+"years": 1,
+"total": 2.0,
+"gtd": 0.75,
+"share": 0.00664
+},
+{
+"id": "00-0034721",
+"name": "Corey Bojorquez",
+"pos": "P",
+"years": 1,
+"total": 2.0,
+"gtd": 0.9375,
+"share": 0.00664
+}
+]

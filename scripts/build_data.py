@@ -137,8 +137,8 @@ def contract_years(c):
     return run, pend
 
 # ---------- stats + snaps ----------
-stats = {2025: {}, 2026: {}}
-for yr in (2025, 2026):
+stats = {2024: {}, 2025: {}, 2026: {}}
+for yr in (2024, 2025, 2026):
     for r in csv.DictReader(open(os.path.join(RAW, f'stats_player_reg_{yr}.csv'))):
         stats[yr][r['player_id']] = r
 
@@ -166,11 +166,12 @@ def per_game(st_, key):
     gp = fnum(st_.get('games')) or 1
     return fnum(st_.get(key)) / gp
 
-def features(g, pos):
-    """Weighted blend of 2025 (weight .45) and 2026-to-date (weight .55) production features."""
+def features(g, pos, yrs=((2025, 0.45), (2026, 0.55))):
+    """Weighted blend of production features. On-field rating: 2025 (.45) + 2026-to-date (.55).
+    Market value uses only seasons before the 2026 free-agency period: 2024 (.4) + 2025 (.6)."""
     feats = {}
     tot_w = 0
-    for yr, w in ((2025, 0.45), (2026, 0.55)):
+    for yr, w in yrs:
         s = stats[yr].get(g, {})
         side = 'off' if pos in ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL') else 'def' if pos in ('DL', 'EDGE', 'LB', 'CB', 'S') else 'st'
         f = {'snap': snap_share(g, yr, side)}
@@ -252,6 +253,7 @@ for g, c in contracts.items():
         'status': (r or {}).get('status', 'FA'),
     }
     p['_f'] = features(g, pos)
+    p['_fp'] = features(g, pos, ((2024, 0.4), (2025, 0.6)))
     players.append(p)
 
 # z-score features within position, blend, percentile-map to an overall
@@ -296,6 +298,140 @@ for pos, lst in by_pos.items():
         up = max(0, 27 - p['age']) * 2.2
         p['pot'] = min(99, max(p['ovr'], round(p['ovr'] + up)))
 
+# ---------- market value (separate from the on-field rating) ----------
+# How the real NFL values each player, using only information from before the 2026 free-agency period:
+#   veterans: most recent pre-2026 contract APY as a share of the cap that year, adjusted for age and
+#             2024-25 production; players on rookie deals: draft slot plus 2024-25 production.
+# Coefficients are fit on 2024-25 UFA signings; the 2026 UFA class is held out as the test set.
+CAP_HIST = {2015: 143280, 2016: 155270, 2017: 167000, 2018: 177200, 2019: 188200, 2020: 198200, 2021: 182500,
+            2022: 208200, 2023: 224800, 2024: 255400, 2025: 279200, 2026: 301200}
+# production percentile within position from 2024-25 stats only
+for pos, lst in by_pos.items():
+    w = WEIGHTS[pos]
+    regs = [p for p in lst if p['_fp'].get('snap', 0) > 0.15] or lst
+    mu = {f: st.mean(p['_fp'].get(f, 0) for p in regs) for f in w}
+    sd = {f: (st.pstdev(p['_fp'].get(f, 0) for p in regs) or 1) for f in w}
+    for p in lst:
+        z = sum(w[f] * (p['_fp'].get(f, 0) - mu[f]) / sd[f] for f in w) / sum(w.values())
+        trust = min(1.0, p['_fp'].get('snap', 0) / 0.45)
+        p['_prod'] = trust * z + (1 - trust) * -1.0
+    sc = sorted(p['_prod'] for p in lst)
+    for p in lst:
+        p['_prodPct'] = (sum(1 for x in sc if x < p['_prod']) + 0.5) / len(sc)
+
+ROOKIE_TYPES = ('Drafted', 'UDFA')
+def history(g):
+    c = contracts.get(g)
+    if not c: return []
+    seen, out = set(), []
+    for h in c['contract_history'] or []:
+        if h['contract_type'] == 'Practice' or not h['apy'] or h['year_signed'] not in CAP_HIST: continue
+        key = (h['year_signed'], h['team'], round(h['apy'], 3), h['contract_type'])
+        if key in seen: continue
+        seen.add(key); out.append(h)
+    return sorted(out, key=lambda h: h['year_signed'])
+
+def mv_features(p, before_year, age):
+    """Feature row for the market model using contracts signed before `before_year`."""
+    prior = [h for h in history(p['id']) if h['year_signed'] < before_year]
+    last = prior[-1] if prior else None
+    top = math.log(TOP_SHARE[p['pos']])
+    prod = p['_prodPct'] - 0.5
+    side = 'off' if p['pos'] in ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL') else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'
+    snap = snap_share(p['id'], 2025, side)           # 2025 playing time (before 2026 free agency)
+    grp = {'QB': 0, 'RB': 1, 'WR': 1, 'TE': 1, 'OT': 2, 'IOL': 2, 'EDGE': 3, 'DL': 3, 'LB': 4, 'CB': 5, 'S': 5}.get(p['pos'], 6)
+    dummies = [1.0 if grp == i else 0.0 for i in range(1, 7)]       # position-group effects (QB = base)
+    if last and last['contract_type'] not in ROOKIE_TYPES:
+        share = max(0.002, last['apy'] * 1000 / CAP_HIST[last['year_signed']])
+        return 'vet', [1.0, math.log(share), prod, max(0, age - 29), top, before_year - last['year_signed'], snap] + dummies
+    pick = p['draft'][2] or 300
+    return 'rookie', [1.0, math.log(pick), prod, top, age - 26, snap, prod * prod, 1.0 if p['draft'][1] == 1 else 0.0] + dummies
+
+TOP_SHARE = {'QB': .183, 'EDGE': .144, 'WR': .120, 'DL': .111, 'CB': .100, 'OT': .089, 'IOL': .078, 'S': .073,
+             'RB': .068, 'LB': .068, 'TE': .058, 'K': .021, 'P': .012, 'LS': .0054}
+
+def lstsq(X, y, ridge=0.5):
+    n = len(X[0])
+    A = [[sum(r[i] * r[j] for r in X) + (ridge if i == j and i > 0 else 0) for j in range(n)] for i in range(n)]
+    b = [sum(r[i] * t for r, t in zip(X, y)) for i in range(n)]
+    for i in range(n):                         # Gaussian elimination
+        piv = max(range(i, n), key=lambda k: abs(A[k][i])); A[i], A[piv] = A[piv], A[i]; b[i], b[piv] = b[piv], b[i]
+        for k in range(i + 1, n):
+            f = A[k][i] / A[i][i]
+            for j in range(i, n): A[k][j] -= f * A[i][j]
+            b[k] -= f * b[i]
+    x = [0.0] * n
+    for i in reversed(range(n)): x[i] = (b[i] - sum(A[i][j] * x[j] for j in range(i + 1, n))) / A[i][i]
+    return x
+
+TRAIN_YEARS = (2022, 2023, 2024, 2025)
+by_id = {p['id']: p for p in players}
+train = {'vet': ([], []), 'rookie': ([], [])}
+holdout = []
+for p in players:
+    for h in history(p['id']):
+        if h['contract_type'] != 'UFA': continue
+        share = h['apy'] * 1000 / CAP_HIST[h['year_signed']]
+        # train on the same kind of deal as the test set: real multi-million contracts (>= ~$2M at the 2026 cap)
+        if h['year_signed'] in TRAIN_YEARS and share >= 0.0066:
+            kind, x = mv_features(p, h['year_signed'], p['age'] - (START_YEAR - h['year_signed']))
+            train[kind][0].append(x); train[kind][1].append(math.log(share))
+        elif h['year_signed'] == 2026 and h['apy'] >= 2.0:
+            holdout.append({'id': p['id'], 'name': p['player'] if 'player' in p else p['name'], 'pos': p['pos'],
+                            'years': h['yrs'], 'total': h['total'], 'gtd': h['guarantees'], 'share': round(share, 5)})
+coef = {k: lstsq(X, y) for k, (X, y) in train.items()}
+# Least squares on weak inputs shrinks predictions toward the average (top free agents come out too low,
+# fringe ones too high). Stretch each model's predictions around its mean by the factor that works best
+# on the TRAINING deals (the 2026 test class is never used to choose it).
+stretch = {}
+for kind_, (X, y) in train.items():   # (don't reuse `k`: it's the $M -> $K helper)
+    pr = [sum(a * b for a, b in zip(x, coef[kind_])) for x in X]
+    m = sum(pr) / len(pr)
+    def hit(f): return sum(abs(math.exp(m + f * (q - m) - t) - 1) <= 0.3 for q, t in zip(pr, y)) / len(y)
+    best_f = max((f / 20 for f in range(20, 61)), key=hit)
+    stretch[kind_] = (m, best_f, round(hit(1.0), 3), round(hit(best_f), 3))
+print('stretch (mean, factor, train within-30% before, after):', stretch)
+def predict(kind, x):
+    q = sum(a * b for a, b in zip(x, coef[kind])); m, f = stretch[kind][0], stretch[kind][1]
+    return math.exp(m + f * (q - m))
+
+def resid(k):
+    X, y = train[k]
+    e = sorted(abs(sum(a * b for a, b in zip(x, coef[k])) - t) for x, t in zip(X, y))
+    return e[len(e) // 2]
+print('market model fit:', {k: (len(train[k][1]), [round(c, 3) for c in coef[k]], 'median |log err| %.2f' % resid(k)) for k in coef})
+for p in players:
+    kind, x = mv_features(p, 2026, p['age'] - 1)
+    p['mv'] = round(max(0.0028, predict(kind, x)), 5)   # share of the cap
+    p['mvKind'] = kind
+json.dump(sorted(holdout, key=lambda h: -h['share']), open(os.path.join(ROOT, 'tests', 'fa_holdout_2026.json'), 'w'), indent=0)
+# The held-out comparison is reported in one place only: tests/fa_market.test.js reads the market
+# values written to src/data.json, so the pipeline and the game can't disagree.
+print('held-out 2026 UFA deals ($2M+):', len(holdout))
+
+# ---------- salary curve: pay by rating, fit on ALL current contracts (minimums and rookie deals too) ----------
+# share = floor + L * TOP[pos] * ((ovr - a) / (99 - a)) ** b. Shape (a, b) fit on every current contract;
+# level L set so a full league (best 53 x 32 players) is paid ~95% of the cap: pay fills the cap.
+cur = [p for p in players if p['years'] and p['signed'] in CAP_HIST or (p['years'] and p['signed'] == START_YEAR)]
+pts = [(p['pos'], p['ovr'], p['apy'] / CAP_HIST.get(p['signed'], CAP_2027)) for p in players if p['years'] and p['signed'] in CAP_HIST]
+FLOOR = 0.0029
+FILL = 0.95
+top_league = sorted(players, key=lambda p: -p['ovr'])[:53 * 32]
+best = None
+for a in range(10, 72, 2):
+    for b10 in range(10, 50, 2):
+        b = b10 / 10
+        g = [TOP_SHARE[pos] * max(0.0, (o - a) / (99 - a)) ** b for pos, o, _ in pts]
+        gl = sum(TOP_SHARE[p['pos']] * max(0.0, (p['ovr'] - a) / (99 - a)) ** b for p in top_league)
+        L = (FILL * 32 - FLOOR * len(top_league)) / max(1e-9, gl)
+        err = sum((FLOOR + L * gi - sh) ** 2 for gi, (_, _, sh) in zip(g, pts))
+        if not best or err < best[0]: best = (err, a, b, L)
+_, CA, CB, CL = best
+print('salary curve fit on %d contracts: a=%d b=%.1f L=%.3f' % (len(pts), CA, CB, CL))
+top1696 = sorted(players, key=lambda p: -p['ovr'])[:53 * 32]
+fill = sum(FLOOR + CL * TOP_SHARE[p['pos']] * max(0.0, (p['ovr'] - CA) / (99 - CA)) ** CB for p in top1696) / 32
+print('curve pay for the best 53x32 players = %.0f%% of the cap per team' % (fill * 100))
+
 # position-specific sub-ratings (0-99) from the same features, for display and sim flavor
 SUBS = {'QB': [('pass', 'epa'), ('acc', 'cpoe')], 'RB': [('run', 'ypc'), ('prod', 'scrim')],
         'WR': [('prod', 'yds'), ('tgt', 'ts')], 'TE': [('rec', 'yds'), ('tgt', 'ts')],
@@ -330,7 +466,7 @@ for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
 OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 for p in players:
     p['line26'] = statline(p['id'], p['pos'])
-    del p['_f']; del p['_score']
+    del p['_f']; del p['_score']; del p['_fp']; del p['_prod']; del p['_prodPct']
     p['pb'] = pro_bowls.get(p['id'], 0)
     if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
         side = 'off' if p['pos'] in OFF_POS else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'
@@ -406,7 +542,7 @@ if os.path.exists(ov_path):
         print(f"override: {p['name']} {r['field']} {old} -> {p[r['field']]}")
 
 players.sort(key=lambda p: (p['team'] or 'ZZZ', -p['ovr']))
-out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'capProjected': True, 'optTable': opt_table, 'optGroup': OPT_GROUP,
+out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'curve': {'a': CA, 'b': CB, 'L': round(CL, 4), 'floor': FLOOR}, 'capProjected': True, 'optTable': opt_table, 'optGroup': OPT_GROUP,
                 'draftOrder': d_order, 'draftOrderFinal': d_final, 'draftOrderGames': d_games, 'rosterFile': ROSTER_FILE,
                 'source': 'nflverse (contracts: OverTheCap), built ' + __import__('datetime').date.today().isoformat()},
        'players': players}
