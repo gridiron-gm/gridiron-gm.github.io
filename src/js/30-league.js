@@ -416,27 +416,71 @@ function aiLateMarket() {
 
 // Fill thin rosters with the best veterans they can afford late in the market (asks drop to ~70%),
 // or generated depth players if the pool runs dry.
+// One source of truth for how open roster spots are filled and priced. Auto-fill uses it to sign players,
+// and the room-needed figures use it to estimate, so warnings match what auto-fill actually does.
+var FILLER_PRICE_EXP = 0;            // generated depth players are undrafted rookies at the rookie minimum
+function fillNeedPos(counts) {
+  return POSITIONS.map(function (pos) { return { pos: pos, short: depthTarget(pos) - (counts[pos] || 0) }; })
+    .sort(byKey(function (n) { return n.short; }, true))[0].pos;
+}
+// Best free agent at `pos` affordable on `budget` (late-market asks drop to ~60%), else null (a generated
+// depth player at the minimum). `taken` = ids already planned.
+// frugal: only players who'd sign for their league minimum (or a generated depth player).
+function fillChoice(pos, budget, taken, frugal) {
+  var cands = freeAgents().filter(function (p) { return p.pos === pos && !(taken && taken[p.id]); }).sort(byKey(function (p) { return p.ovr; }, true));
+  if (frugal) {   // cheapest player who signs for his minimum (undrafted rookies first), best rating among ties
+    var best = null;
+    cands.forEach(function (c) {
+      var min = Cap.minSalary(c.exp, S.year), pr = Math.max(min, Math.round(Market.demand(c, marketCap(), S.year).apy * 0.6));
+      if (pr <= min && (!best || pr < best.price)) best = { p: c, price: pr };
+    });
+    var fill = Cap.minSalary(FILLER_PRICE_EXP, S.year);
+    return best && best.price <= fill ? best : { p: null, price: fill };   // never pay more than an undrafted rookie
+  }
+  for (var i = 0; i < cands.length; i++) {
+    var c = cands[i], min = Cap.minSalary(c.exp, S.year);
+    var pr = Math.max(min, Math.round(Market.demand(c, marketCap(), S.year).apy * 0.6));
+    if (frugal ? pr <= min : pr <= Math.max(min * 1.3, budget)) return { p: c, price: pr };
+  }
+  return { p: null, price: Cap.minSalary(FILLER_PRICE_EXP, S.year) };
+}
+function fillBudget(room, slotsLeft) { return (room - slotsLeft * 1100) / Math.max(2, slotsLeft / 3); }
+// Plan `slots` signings for `abbr` starting from `room` of cap space, without signing anyone.
+// extraPos: position of a player about to be added (counts toward depth needs).
+// frugal: fill every spot the cheapest way (minimum-ish players only), i.e. the least it can cost.
+function planFill(abbr, slots, room, extraPos, frugal) {
+  var counts = {}, taken = {}, cost = 0;
+  roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+  if (extraPos) counts[extraPos] = (counts[extraPos] || 0) + 1;
+  for (var n = slots; n > 0; n--) {
+    var pos = fillNeedPos(counts), ch = fillChoice(pos, fillBudget(room, n), taken, frugal);
+    if (ch.p) taken[ch.p.id] = true;
+    counts[pos] = (counts[pos] || 0) + 1; cost += ch.price; room -= ch.price;
+  }
+  return cost;
+}
+
 function aiFillRoster(target, teams) {
   (teams || aiTeams()).forEach(function (abbr) {
     var need = (target - roster(abbr).length) * 1100;
     if (need > 0 && (abbr !== S.user || S.autopilot)) aiCapFix(abbr, need);
-    var guard = 0;
+    var guard = 0, slots = target - roster(abbr).length;
+    // if the normal plan doesn't fit the room, fill frugally (minimum-ish players) so as many spots as
+    // possible get filled
+    var avail = abbr === S.user && !S.autopilot ? Math.min(space(abbr), fullSpace(abbr)) : space(abbr);
+    var frugal = slots > 0 && planFill(abbr, slots, avail) > avail;
     while (roster(abbr).length < target && guard++ < 80) {
-      var needs = POSITIONS.map(function (pos) {
-        var have = roster(abbr).filter(function (p) { return p.pos === pos; }).length;
-        return { pos: pos, short: depthTarget(pos) - have };
-      }).sort(byKey(function (n) { return n.short; }, true));
-      var pos = needs[0].pos;
-      var slots = target - roster(abbr).length;
-      var budget = (space(abbr) - slots * 1100) / Math.max(2, slots / 3);
-      var cands = freeAgents().filter(function (p) { return p.pos === pos; }).sort(byKey(function (p) { return p.ovr; }, true));
-      var p = null, price = 0;
-      for (var i = 0; i < cands.length; i++) {
-        var c = cands[i], min = Cap.minSalary(c.exp, S.year);
-        var pr = Math.max(min, Math.round(Market.demand(c, marketCap(), S.year).apy * 0.6));
-        if (pr <= Math.max(min * 1.3, budget)) { p = c; price = pr; break; }
-      }
-      if (!p) { p = makeFiller(pos); price = Cap.minSalary(p.exp, S.year); }
+      var counts = {};
+      roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+      var pos = fillNeedPos(counts);
+      var ch = fillChoice(pos, fillBudget(space(abbr), target - roster(abbr).length), null, frugal);
+      var p = ch.p, price = ch.price;
+      var fillPrice = Cap.minSalary(FILLER_PRICE_EXP, S.year);
+      // the user's auto-fill must still fit at week 1, when every contract counts (not just the top 51);
+      // if the first choice doesn't fit, fall back to an undrafted rookie at the minimum
+      var userRoom = abbr === S.user && !S.autopilot ? fullSpace(abbr) : Infinity;
+      if (p && price > userRoom) p = null;
+      if (!p) { if (fillPrice > userRoom) break; p = makeFiller(pos); price = fillPrice; }
       var r = sign(p, abbr, { years: 1, total: price, bonus: 0, gtd: 0 }, true);
       if (!r.ok) break;
     }
@@ -491,9 +535,9 @@ var FIRST = ['James', 'Marcus', 'Tyler', 'Jalen', 'Darius', 'Caleb', 'Malik', 'J
 var LAST = ['Walker', 'Brooks', 'Hayes', 'Coleman', 'Bennett', 'Reed', 'Foster', 'Price', 'Jenkins', 'Barnes', 'Morris', 'Russell', 'Griffin', 'Hughes', 'Sanders', 'Patterson', 'Myers', 'Ford', 'Hamilton', 'Graham', 'Sullivan', 'Wallace', 'West', 'Cole', 'Owens', 'Harrison', 'Gibson', 'Ellis', 'Stephens', 'Tucker', 'Porter', 'Hunter', 'Hicks', 'Crawford', 'Boyd', 'Mason', 'Warren', 'Dixon', 'Ramos', 'Burns', 'Gordon', 'Shaw', 'Holmes', 'Rice', 'Robertson', 'Black', 'Daniels', 'Palmer', 'Mills', 'Nichols', 'Grant', 'Knight', 'Ferguson', 'Rose', 'Stone', 'Hawkins', 'Dunn', 'Perkins', 'Hudson', 'Spencer', 'Gardner', 'Stevens', 'Tran', 'Okafor', 'Adeyemi', 'Kowalski', 'Lindqvist', 'Moreau', 'Delgado', 'Fitzgerald'];
 function fakeName() { return RNG.pick(FIRST) + ' ' + RNG.pick(LAST); }
 function makeFiller(pos) {
-  var age = RNG.int(23, 28), ovr = RNG.int(44, 55);
+  var age = RNG.int(22, 24), ovr = RNG.int(44, 55);   // undrafted rookie depth
   var p = { id: 'G' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
-            exp: age - 22, draft: [0, 0, 0], apy: 0, signed: S.year, gtdTotal: 0, years: [], options: [], status: 'FA',
+            exp: 0, draft: [0, 0, 0], apy: 0, signed: S.year, gtdTotal: 0, years: [], options: [], status: 'FA',
             ovr: ovr, pot: ovr + RNG.int(0, 3), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
   S.players.push(p); if (S._idx) S._idx[p.id] = p;
   return p;
@@ -507,14 +551,12 @@ function userAutoRoster() {
   if (S.phase === 'preseason' || S.phase === 'season') cutdown(S.user);
   autoDepth(S.user);
   var n = roster(S.user).length, missing = Math.max(0, ROSTER_MAX - n);
-  var short = missing ? Math.max(0, missing * fillSpotCost() - fullSpace(S.user)) : 0;
+  var short = missing ? rosterFill(S.user).short : 0;
   return { filled: n - before, missing: missing, short: short,
            msg: missing ? 'Couldn\'t fill ' + missing + ' spot' + (missing > 1 ? 's' : '') + ': ' + fmtM(Math.max(short, 1)) + ' short.' : 'Roster filled to ' + n + '.' };
 }
 
 // ---------- room needed to fill 53 ----------
-// Open spots are filled at about a veteran-minimum salary.
-function fillSpotCost() { return Cap.minSalary(2, S.year); }
 function pickNumberEstimate(k) {
   if (k.no) return k.no;
   var ord = S.lastOrder || BASE.draftOrder, i = ord ? ord.indexOf(k.orig) : -1;
@@ -529,14 +571,18 @@ function unsignedPicks(abbr) {
 // What it costs to have 53 players at week 1 (when every contract counts): unsigned draft picks at their
 // slotted first-year cap hit plus the remaining open spots at the minimum. `extraSigned` = players about
 // to be added (e.g. the free agent in an offer); `extraHit` = their first-year cap hit.
-function rosterFill(abbr, extraSigned, extraHit) {
+function rosterFill(abbr, extraSigned, extraHit, extraPos) {
   var have = roster(abbr).length + (extraSigned || 0), spots = Math.max(0, ROSTER_MAX - have);
   var picks = unsignedPicks(abbr).slice(0, spots);
   var pickCost = sumBy(picks, function (k) {
     return Cap.buildContract(Cap.rookieDeal(pickNumberEstimate(k), S.year, capOf(S.year)), S.year, 0)[0].cap;
   });
-  var open = spots - picks.length, minCost = open * fillSpotCost();
+  var open = spots - picks.length;
   var room = fullSpace(abbr) - (extraHit || 0);
+  // open spots at the least auto-fill can fill them for (the same choices it makes when money is tight).
+  // Before the draft is over, undrafted rookies at the rookie minimum will be the cheapest fill.
+  var preDraft = S.phase === 'resign' || S.phase === 'fa' || S.phase === 'draft';
+  var minCost = !open ? 0 : preDraft ? open * Cap.minSalary(0, S.year) : planFill(abbr, open, room - pickCost, extraPos, true);
   var need = pickCost + minCost;
   return { have: have, spots: spots, picks: picks.length, pickCost: pickCost, open: open, minCost: minCost, need: need, room: room, short: Math.max(0, need - room) };
 }
@@ -545,7 +591,13 @@ function makeRoomOptions(abbr) {
   var ros = roster(abbr);
   var rs = ros.map(function (p) { var m = Cap.restructureMax(p, S.year, p.exp), n = Math.min(5, Cap.remaining(p, S.year).length); return { p: p, saves: m - Math.floor(m / Math.max(1, n)) }; })
     .filter(function (x) { return x.saves > 500; }).sort(byKey(function (x) { return x.saves; }, true)).slice(0, 3);
-  var cuts = ros.map(function (p) { var pv = releasePreview(p, false); return { p: p, saves: pv.savings, dead: pv.now, score: pv.savings / 1000 - Math.max(0, p.ovr - 55) * 0.6 }; })
-    .filter(function (x) { return x.saves > 500; }).sort(byKey(function (x) { return x.score; }, true)).slice(0, 5);
+  // cuts: never players rated 80+; rank by cap freed per rating point lost (vs a ~50-rated minimum-salary
+  // replacement), with starters after every backup
+  var cuts = ros.filter(function (p) { return p.ovr < 80; }).map(function (p) {
+      var pv = releasePreview(p, false), starter = starters(abbr, p.pos).indexOf(p) >= 0;
+      return { p: p, saves: pv.savings, dead: pv.now, starter: starter, perPoint: pv.savings / Math.max(1, p.ovr - 50) };
+    })
+    .filter(function (x) { return x.saves > 500; })
+    .sort(function (a, b) { return (a.starter - b.starter) || (b.perPoint - a.perPoint); }).slice(0, 5);
   return { restructures: rs, cuts: cuts };
 }

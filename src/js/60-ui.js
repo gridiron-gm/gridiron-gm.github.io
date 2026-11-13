@@ -260,7 +260,7 @@ function offerModal(id, mode) {
 // Shortfall to fill 53 after this deal (0 if fine). Only matters before the season.
 function offerShortfall(p, mode, hitNow) {
   if (S.phase === 'playoffs') return 0;
-  return rosterFill(S.user, mode === 'extend' ? 0 : 1, hitNow).short;
+  return rosterFill(S.user, mode === 'extend' ? 0 : 1, hitNow, mode === 'extend' ? null : p.pos).short;
 }
 function roomMetric() {
   var rf = rosterFill(S.user);
@@ -273,8 +273,8 @@ function makeRoomModal() {
     var h = '<div class="mhead"><div><h2>Make room</h2><p class="muted">Filling ' + ROSTER_MAX + ' needs ' + fmtM(rf.need) + '; you have ' + fmtM(rf.room) + ' with every contract counted' + (rf.short ? ': <b class="bad">' + fmtM(rf.short) + ' short</b>' : '') + '.</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
     h += '<h3>Restructures</h3>' + (o.restructures.length ? '<table><tbody>' + o.restructures.map(function (x) {
       return '<tr><td>' + esc(x.p.name) + ' <span class="muted">' + x.p.pos + '</span></td><td class="r">saves ' + fmtM(x.saves) + ' now</td><td><button data-act="restructure" data-id="' + x.p.id + '" data-back="room">Restructure</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">No contracts left to restructure.</p>');
-    h += '<h3>Cut options</h3><p class="muted small">Most cap freed for the least talent lost.</p>' + (o.cuts.length ? '<table><tbody>' + o.cuts.map(function (x) {
-      return '<tr><td>' + esc(x.p.name) + ' <span class="muted">' + x.p.pos + ' · ' + x.p.ovr + '</span></td><td class="r">saves ' + fmtM(x.saves) + '</td><td class="r muted">dead ' + fmtM(x.dead) + '</td><td><button data-act="player" data-id="' + x.p.id + '">Review</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">No cuts that save money.</p>');
+    h += '<h3>Cut options</h3><p class="muted small">Most cap freed per rating point lost. Players rated 80+ are left out; starters come last.</p>' + (o.cuts.length ? '<table><tbody>' + o.cuts.map(function (x) {
+      return '<tr><td>' + esc(x.p.name) + ' <span class="muted">' + x.p.pos + ' · ' + x.p.ovr + ' · ' + (x.starter ? 'starter' : 'backup') + '</span></td><td class="r">saves ' + fmtM(x.saves) + ' (' + fmtM(x.perPoint) + '/rating pt)</td><td class="r muted">dead ' + fmtM(x.dead) + '</td><td><button data-act="player" data-id="' + x.p.id + '">Review</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">No cuts that save money.</p>');
     return h;
   };
 }
