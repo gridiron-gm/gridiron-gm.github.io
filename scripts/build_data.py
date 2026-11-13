@@ -384,16 +384,17 @@ coef = {k: lstsq(X, y) for k, (X, y) in train.items()}
 # fringe ones too high). Stretch each model's predictions around its mean by the factor that works best
 # on the TRAINING deals (the 2026 test class is never used to choose it).
 stretch = {}
-for k, (X, y) in train.items():
-    pr = [sum(a * b for a, b in zip(x, coef[k])) for x in X]
+for kind_, (X, y) in train.items():   # (don't reuse `k`: it's the $M -> $K helper)
+    pr = [sum(a * b for a, b in zip(x, coef[kind_])) for x in X]
     m = sum(pr) / len(pr)
     def hit(f): return sum(abs(math.exp(m + f * (q - m) - t) - 1) <= 0.3 for q, t in zip(pr, y)) / len(y)
     best_f = max((f / 20 for f in range(20, 61)), key=hit)
-    stretch[k] = (m, best_f, round(hit(1.0), 3), round(hit(best_f), 3))
+    stretch[kind_] = (m, best_f, round(hit(1.0), 3), round(hit(best_f), 3))
 print('stretch (mean, factor, train within-30% before, after):', stretch)
 def predict(kind, x):
     q = sum(a * b for a, b in zip(x, coef[kind])); m, f = stretch[kind][0], stretch[kind][1]
     return math.exp(m + f * (q - m))
+
 def resid(k):
     X, y = train[k]
     e = sorted(abs(sum(a * b for a, b in zip(x, coef[k])) - t) for x, t in zip(X, y))
@@ -404,13 +405,8 @@ for p in players:
     p['mv'] = round(max(0.0028, predict(kind, x)), 5)   # share of the cap
     p['mvKind'] = kind
 json.dump(sorted(holdout, key=lambda h: -h['share']), open(os.path.join(ROOT, 'tests', 'fa_holdout_2026.json'), 'w'), indent=0)
-def holdout_report():
-    out = {}
-    for kind in ('vet', 'rookie', 'all'):
-        rs = sorted(by_id[h['id']]['mv'] / h['share'] for h in holdout if kind == 'all' or by_id[h['id']]['mvKind'] == kind)
-        if rs: out[kind] = (len(rs), round(rs[len(rs) // 2], 2), round(sum(0.7 <= r <= 1.3 for r in rs) / len(rs), 2))
-    return out
-print('holdout (n, median ask/real, share within 30%):', holdout_report())
+# The held-out comparison is reported in one place only: tests/fa_market.test.js reads the market
+# values written to src/data.json, so the pipeline and the game can't disagree.
 print('held-out 2026 UFA deals ($2M+):', len(holdout))
 
 # ---------- salary curve: pay by rating, fit on ALL current contracts (minimums and rookie deals too) ----------

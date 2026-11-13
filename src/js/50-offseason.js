@@ -31,8 +31,10 @@ function advance() {
       news('Preseason: get to ' + ROSTER_MAX + ' players before week 1.');
       break;
     case 'preseason':
-      aiFreeAgencyDay(); aiExtensions();
+      aiFreeAgencyDay(); aiLateMarket(); aiExtensions();
       aiFillRoster(ROSTER_MAX);
+      aiTeams().forEach(function (a) { cutdown(a); });
+      aiLateMarket();                          // second pass: cutdowns free room for anyone still unsigned
       aiTeams().forEach(function (a) { cutdown(a); });
       S.phase = 'season';                      // top-51 rule ends: every contract counts now
       aiTeams().forEach(function (a) { aiCapFix(a, 500); });

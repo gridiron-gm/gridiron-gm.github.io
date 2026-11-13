@@ -330,7 +330,9 @@ function aiCapFix(abbr, buffer) {
                 .sort(byKey(function (p) { return Cap.restructureMax(p, S.year, p.exp); }, true))[0];
     if (rc) { restructurePlayer(rc, Cap.restructureMax(rc, S.year, rc.exp)); continue; }
     var cut = ros.map(function (p) { var pv = releasePreview(p, !isPostJune() && canJune1(abbr) && Cap.capHit(p, S.year) > 15000); return { p: p, pv: pv, s: pv.savings / 1000 - Math.max(0, p.ovr - 60) * 0.5 }; })
-                 .filter(function (x) { return x.pv.savings > 500; }).sort(byKey(function (x) { return x.s; }, true))[0];
+                 .filter(function (x) { return x.pv.savings > 500; })
+                 // keep good young players unless there's no other way to get compliant
+                 .sort(byKey(function (x) { return x.s - (x.p.ovr >= 80 && x.p.age < 30 ? 1000 : 0); }, true))[0];
     if (!cut) break;
     release(cut.p, cut.pv.post && !isPostJune());
   }
@@ -360,7 +362,8 @@ function aiFreeAgencyDay() {
     order.forEach(function (abbr) {
       if (roster(abbr).length >= rosterMax() - 2) return;
       var sp = space(abbr);
-      var target = 3000 + rookieRoom;                 // teams aim to spend down to this much space
+      // teams keep ~$8M of room through the first days of free agency, then spend down further
+      var target = (S.phase === 'fa' && S.faDay < 3 ? 8000 : 3000) + rookieRoom;
       var disc = 1 - Market.faDiscount(S.faDay);
       if (sp <= target) return;
       var best = null, bestScore = 0;
@@ -385,6 +388,30 @@ function aiFreeAgencyDay() {
       }
     });
   }
+}
+
+// Late market (preseason): good players still unsigned take one-year "prove-it" deals for whatever room
+// a team has, as long as it reaches about a third of their ask. Teams with the most room go first.
+// room that will still be there at week 1, when every contract counts (not just the top 51)
+function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 1500; }
+function aiLateMarket() {
+  freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
+    var teams = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+      .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
+      .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
+    if (!teams.length) {
+      // nobody has the room: the team that needs him most makes room (restructures, then cuts lesser players)
+      var needy = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
+      if (!needy) return;
+      aiCapFix(needy, floor + 1500 + Math.max(0, space(needy) - fullSpace(needy)));
+      if (lateRoom(needy) < floor) return;
+      teams = [{ a: needy, room: lateRoom(needy) }];
+    }
+    var price = Math.min(ask, teams[0].room);
+    sign(p, teams[0].a, { years: 1, total: price, bonus: 0, gtd: Math.round(price * 0.5) }, true);
+  });
 }
 
 // Fill thin rosters with the best veterans they can afford late in the market (asks drop to ~70%),
