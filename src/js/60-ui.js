@@ -71,7 +71,7 @@ VIEWS.hub = function () {
     metric('Team OVR', r.ovr, 'Off ' + r.off + ' · Def ' + r.def) +
     metric('Cap space', fmtM(space(S.user)), 'approx. · ' + capLabel()) +
     metric('Record', recStr(rec), S.phase === 'season' || S.phase === 'playoffs' ? divRank() : 'Season not started') +
-    metric('Dead money', fmtM(Cap.teamDead(T(S.user), S.year)), S.year + ' cap') + '</div>';
+    metric('Dead money', fmtM(Cap.teamDead(T(S.user), S.year)), S.year + ' cap') + roomMetric() + '</div>';
   h += '<div class="grid2">';
   h += '<section class="card"><h3>To do</h3><ul class="todo">' + todo(exp, lastYear, nextGame).join('') + '</ul></section>';
   h += '<section class="card"><h3>Needs</h3>' + (needs.length ? needs.map(function (n) {
@@ -93,6 +93,10 @@ function todo(exp, lastYear, nextGame) {
   if (S.phase === 'fa') out.push('<li>Free agency day ' + (S.faDay + 1) + ': other teams sign players each day. <button class="link" data-act="view" data-v="fa">Browse free agents</button></li>');
   if (S.phase === 'draft') out.push('<li>The draft is on. <button class="link" data-act="view" data-v="draft">Go to the draft board</button></li>');
   if (S.phase === 'preseason') out.push('<li>Get to ' + ROSTER_MAX + ' players (now ' + roster(S.user).length + '). <button class="link" data-act="auto-roster">Auto-fill and cut</button></li>');
+  var rf = rosterFill(S.user);
+  if ((S.phase === 'preseason' || S.phase === 'season') && roster(S.user).length < ROSTER_MAX)
+    out.push('<li class="bad">Roster is under ' + ROSTER_MAX + ' (' + roster(S.user).length + ' players).' + (rf.short ? ' You need ' + fmtM(rf.short) + ' more room to fill it.' : '') + ' <button class="link" data-act="make-room">Make room</button></li>');
+  else if (rf.short && S.phase !== 'playoffs') out.push('<li class="bad">Filling ' + ROSTER_MAX + ' needs ' + fmtM(rf.need) + ' but you have ' + fmtM(rf.room) + ' at week-1 counting: ' + fmtM(rf.short) + ' short. <button class="link" data-act="make-room">Make room</button></li>');
   if (nextGame) out.push('<li>Week ' + (S.week + 1) + ': ' + (nextGame.h === S.user ? 'vs ' : 'at ') + teamLink(nextGame.h === S.user ? nextGame.a : nextGame.h) + ' (' + teamRating(nextGame.h === S.user ? nextGame.a : nextGame.h).ovr + ' OVR)</li>');
   if (lastYear.length && S.phase !== 'playoffs') out.push('<li>' + lastYear.length + ' players are in the last year of their deal: ' + lastYear.sort(byKey(function (p) { return p.ovr; }, true)).slice(0, 4).map(function (p) { return '<button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button>'; }).join(', ') + '</li>');
   if (space(S.user) < 0) out.push('<li class="bad">You are over the cap. Release, trade or restructure players.</li>');
@@ -147,6 +151,8 @@ VIEWS.cap = function () {
   h += row('Active contracts', function (y) { return fmtM(committed(S.user, y)) + (top51(y) ? ' <span class="muted small">top 51</span>' : ''); });
   h += row('Dead money', function (y) { return fmtM(Cap.teamDead(team, y)); });
   h += row('Cap space (approx.)', function (y) { var s = space(S.user, y); return '<b class="' + (s < 0 ? 'bad' : '') + '">' + fmtM(s) + '</b>'; }, 'total');
+  var rf = rosterFill(S.user);
+  h += row('Room needed to fill ' + ROSTER_MAX, function (y) { return y === S.year ? '<span class="' + (rf.short ? 'bad' : '') + '">' + fmtM(rf.need) + '</span>' : ''; });
   h += row('Players under contract', function (y) { return roster(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
   h += '</tbody></table></div><h3>Contracts</h3><div class="tablewrap"><table><thead><tr><th>Player</th><th>Pos</th>' + years.map(function (y) { return '<th class="r">' + y + '</th>'; }).join('') + '<th class="r">Gtd left</th></tr></thead><tbody>';
   roster(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
@@ -243,9 +249,32 @@ function offerModal(id, mode) {
     });
     h += '</tbody></table></div>';
     h += '<p>Cap space after: <b class="' + (space(abbr) - hitNow < 0 ? 'bad' : '') + '">' + fmtM(space(abbr) - hitNow) + '</b> <span class="muted">approx.</span></p>';
+    var fillShort = offerShortfall(p, mode, hitNow);
+    if (fillShort > 0) h += '<p class="warn">This leaves you ' + fmtM(fillShort) + ' short of filling your roster (' + ROSTER_MAX + ' players at week 1).</p>';
     h += '<div class="moodrow"><span class="pill ' + mood[0] + '">' + mood[1] + '</span> <span class="muted">' + ev.notes.map(function (n) { return n.k + (n.good ? ' ✓' : ' ✗'); }).join(' · ') + '</span></div>';
     if (UI.offerErr) h += '<p class="bad">' + esc(UI.offerErr) + '</p>';
     h += '<div class="actions"><button data-act="offer-ask">Fill in asking price</button><button class="primary" data-act="offer-submit">Make offer</button></div>';
+    return h;
+  };
+}
+// Shortfall to fill 53 after this deal (0 if fine). Only matters before the season.
+function offerShortfall(p, mode, hitNow) {
+  if (S.phase === 'playoffs') return 0;
+  return rosterFill(S.user, mode === 'extend' ? 0 : 1, hitNow).short;
+}
+function roomMetric() {
+  var rf = rosterFill(S.user);
+  if (!rf.spots) return '';
+  return metric('Room needed to fill ' + ROSTER_MAX, fmtM(rf.need), (rf.picks ? rf.picks + ' draft picks + ' : '') + rf.open + ' spots at minimum' + (rf.short ? ' · <span class="bad">' + fmtM(rf.short) + ' short</span>' : ''));
+}
+function makeRoomModal() {
+  return function () {
+    var o = makeRoomOptions(S.user), rf = rosterFill(S.user);
+    var h = '<div class="mhead"><div><h2>Make room</h2><p class="muted">Filling ' + ROSTER_MAX + ' needs ' + fmtM(rf.need) + '; you have ' + fmtM(rf.room) + ' with every contract counted' + (rf.short ? ': <b class="bad">' + fmtM(rf.short) + ' short</b>' : '') + '.</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
+    h += '<h3>Restructures</h3>' + (o.restructures.length ? '<table><tbody>' + o.restructures.map(function (x) {
+      return '<tr><td>' + esc(x.p.name) + ' <span class="muted">' + x.p.pos + '</span></td><td class="r">saves ' + fmtM(x.saves) + ' now</td><td><button data-act="restructure" data-id="' + x.p.id + '" data-back="room">Restructure</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">No contracts left to restructure.</p>');
+    h += '<h3>Cut options</h3><p class="muted small">Most cap freed for the least talent lost.</p>' + (o.cuts.length ? '<table><tbody>' + o.cuts.map(function (x) {
+      return '<tr><td>' + esc(x.p.name) + ' <span class="muted">' + x.p.pos + ' · ' + x.p.ovr + '</span></td><td class="r">saves ' + fmtM(x.saves) + '</td><td class="r muted">dead ' + fmtM(x.dead) + '</td><td><button data-act="player" data-id="' + x.p.id + '">Review</button></td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted">No cuts that save money.</p>');
     return h;
   };
 }
@@ -395,7 +424,8 @@ function onClick(e) {
     case 'sim-season': UI.msg = null; var g = 0; while (S.phase === 'season' && S.week < WEEKS && g++ < 30) advance(); break;
     case 'sim-playoffs': var g2 = 0; while (S.phase === 'playoffs' && !S.playoffs.champ && g2++ < 6) advance(); UI.view = 'standings'; break;
     case 'skip-fa': UI.msg = null; var g3 = 0; while (S.phase === 'fa' && g3++ < 10) advance(); UI.view = 'draft'; break;
-    case 'auto-roster': userAutoRoster(); flash('Roster filled with minimum-salary players and cut to ' + Math.min(roster(S.user).length, ROSTER_MAX) + '.'); break;
+    case 'auto-roster': var ar = userAutoRoster(); flash(ar.msg + (ar.missing ? ' Restructure a contract or cut someone to make room.' : ''), ar.missing > 0); if (ar.missing) UI.modal = makeRoomModal(); break;
+    case 'make-room': UI.modal = makeRoomModal(); break;
     case 'filter': UI[d.k] = d.p; break;
     case 'sort': UI.sort = d.s; break;
     case 'leaders': UI.leaders = d.c; break;
@@ -407,7 +437,7 @@ function onClick(e) {
       r = release(p, d.j === '1'); UI.modal = null; flash(r.ok ? p.name + ' released.' : r.msg, !r.ok); break;
     case 'restructure':
       var rp = P(d.id), res = restructurePlayer(rp, Cap.restructureMax(rp, S.year, rp.exp));
-      flash(res.saved ? 'Restructured ' + rp.name + ': ' + fmtM(res.saved) + ' saved this year.' : 'Nothing to restructure.'); UI.modal = playerModal(d.id); break;
+      flash(res.saved ? 'Restructured ' + rp.name + ': ' + fmtM(res.saved) + ' saved this year.' : 'Nothing to restructure.'); UI.modal = d.back === 'room' ? makeRoomModal() : playerModal(d.id); break;
     case 'offer': UI.offer = null; UI.offerErr = null; UI.modal = offerModal(d.id, d.mode); break;
     case 'offer-ask':
       var op = P(UI.offer.id), dd = Market.demand(op, marketCap(), S.year), disc = UI.offer.mode === 'extend' || S.phase === 'resign' ? 1 : 1 - Market.faDiscount(offerCtx(op, S.user).daysIntoFA);

@@ -17,7 +17,7 @@ body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; li
 h1 { font-size: 28px; font-weight: 600; margin: 24px 0 4px; }
 h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
 h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
-.muted { color: var(--muted); } .small { font-size: 12px; } .bad { color: var(--bad); } .good { color: var(--good); }
+.muted { color: var(--muted); } .warn { color: var(--warn); background: var(--warn-bg); padding: 6px 10px; border-radius: var(--radius); } .small { font-size: 12px; } .bad { color: var(--bad); } .good { color: var(--good); }
 button { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 10px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

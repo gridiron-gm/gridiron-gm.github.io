@@ -500,8 +500,52 @@ function makeFiller(pos) {
 }
 
 // The user's "auto roster" button: fill thin spots with minimum-salary players, then cut to 53.
+// Returns { filled, missing, short, msg }. Says so when the cap stops it short of 53.
 function userAutoRoster() {
+  var before = roster(S.user).length;
   aiFillRoster(ROSTER_MAX, [S.user]);
   if (S.phase === 'preseason' || S.phase === 'season') cutdown(S.user);
   autoDepth(S.user);
+  var n = roster(S.user).length, missing = Math.max(0, ROSTER_MAX - n);
+  var short = missing ? Math.max(0, missing * fillSpotCost() - fullSpace(S.user)) : 0;
+  return { filled: n - before, missing: missing, short: short,
+           msg: missing ? 'Couldn\'t fill ' + missing + ' spot' + (missing > 1 ? 's' : '') + ': ' + fmtM(Math.max(short, 1)) + ' short.' : 'Roster filled to ' + n + '.' };
+}
+
+// ---------- room needed to fill 53 ----------
+// Open spots are filled at about a veteran-minimum salary.
+function fillSpotCost() { return Cap.minSalary(2, S.year); }
+function pickNumberEstimate(k) {
+  if (k.no) return k.no;
+  var ord = S.lastOrder || BASE.draftOrder, i = ord ? ord.indexOf(k.orig) : -1;
+  return (k.round - 1) * 32 + (i >= 0 ? i + 1 : 16);
+}
+function unsignedPicks(abbr) {
+  if (!(S.phase === 'resign' || S.phase === 'fa' || S.phase === 'draft')) return [];
+  return S.picks.filter(function (k) {
+    return k.owner === abbr && k.year === S.year && !(S.draft && S.draft.order.indexOf(k.id) >= 0 && S.draft.order.indexOf(k.id) < S.draft.i);
+  }).sort(byKey(pickNumberEstimate));
+}
+// What it costs to have 53 players at week 1 (when every contract counts): unsigned draft picks at their
+// slotted first-year cap hit plus the remaining open spots at the minimum. `extraSigned` = players about
+// to be added (e.g. the free agent in an offer); `extraHit` = their first-year cap hit.
+function rosterFill(abbr, extraSigned, extraHit) {
+  var have = roster(abbr).length + (extraSigned || 0), spots = Math.max(0, ROSTER_MAX - have);
+  var picks = unsignedPicks(abbr).slice(0, spots);
+  var pickCost = sumBy(picks, function (k) {
+    return Cap.buildContract(Cap.rookieDeal(pickNumberEstimate(k), S.year, capOf(S.year)), S.year, 0)[0].cap;
+  });
+  var open = spots - picks.length, minCost = open * fillSpotCost();
+  var room = fullSpace(abbr) - (extraHit || 0);
+  var need = pickCost + minCost;
+  return { have: have, spots: spots, picks: picks.length, pickCost: pickCost, open: open, minCost: minCost, need: need, room: room, short: Math.max(0, need - room) };
+}
+// Best ways to make room: biggest restructure savings, and cuts that free the most for the least talent.
+function makeRoomOptions(abbr) {
+  var ros = roster(abbr);
+  var rs = ros.map(function (p) { var m = Cap.restructureMax(p, S.year, p.exp), n = Math.min(5, Cap.remaining(p, S.year).length); return { p: p, saves: m - Math.floor(m / Math.max(1, n)) }; })
+    .filter(function (x) { return x.saves > 500; }).sort(byKey(function (x) { return x.saves; }, true)).slice(0, 3);
+  var cuts = ros.map(function (p) { var pv = releasePreview(p, false); return { p: p, saves: pv.savings, dead: pv.now, score: pv.savings / 1000 - Math.max(0, p.ovr - 55) * 0.6 }; })
+    .filter(function (x) { return x.saves > 500; }).sort(byKey(function (x) { return x.score; }, true)).slice(0, 5);
+  return { restructures: rs, cuts: cuts };
 }

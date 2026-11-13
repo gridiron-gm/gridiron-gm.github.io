@@ -10,7 +10,7 @@ Browser franchise sim with real NFL rosters and contracts. Static site on GitHub
 
 ## Rules for changes
 - Edit `src/`, never `docs/` directly. Run `./build.sh` after every change.
-- Run the tests after touching game logic: `node tests/cap.test.js`, `node tests/market.test.js`, `node tests/league.test.js`, `node tests/sim.test.js 8` (add `freeze` to hold the pay level at 1.0).
+- Run the tests after touching game logic: `node tests/cap.test.js`, `node tests/market.test.js`, `node tests/league.test.js`, `node tests/roomfill.test.js`, `node tests/fa_market.test.js`, `node tests/sim.test.js 8` (add `freeze` to hold the pay level at 1.0).
 - `tests/otc_reference.json` holds OverTheCap's published 2027 dead money, cap savings and restructure savings for 5 players; the cap engine must keep matching it.
 - Every player's rating moves only for aging and performance (no re-normalization). League talent is kept stable by draft-class strength per position (`updateClassStrength`).
 - `data/overrides.csv` holds hand-checked corrections (e.g. original-ballot Pro Bowl counts); `build_data.py` applies it. Cite a source in each row.
