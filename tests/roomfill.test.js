@@ -61,8 +61,20 @@ ok('B: make-room screen lists restructures and cuts', mr.restructures.length > 0
 ok('B: cut options never include players rated 80+', mr.cuts.every(x => x.p.ovr < 80));
 const firstStarter = mr.cuts.findIndex(x => x.starter);
 ok('B: starters come after every backup', firstStarter < 0 || mr.cuts.slice(firstStarter).every(x => x.starter));
-ok('B: backups ranked by cap freed per rating point', mr.cuts.filter(x => !x.starter).every((x, i, a) => i === 0 || a[i - 1].perPoint >= x.perPoint));
-console.log('  cut options:', mr.cuts.map(x => `${x.p.name} (${x.p.ovr}${x.starter ? ', starter' : ''}, ${B.run(`fmtM(${x.perPoint})`)}/pt)`).join(', '));
+const repl = B.run('Cap.minSalary(FILLER_PRICE_EXP, S.year)');
+ok('B: each cut shows net room = savings - minimum-salary refill', mr.cuts.every(x => x.replacement === repl && x.net === x.saves - repl));
+ok('B: cuts netting under $250K are hidden', mr.cuts.every(x => x.net >= 250));
+ok('B: sorted by net room (backups, then starters)', mr.cuts.every((x, i, a) => i === 0 || a[i - 1].starter < x.starter || (a[i - 1].starter === x.starter && a[i - 1].net >= x.net)));
+// the "N of these cuts" line: N = how many listed cuts, in order, it takes for net room to cover the shortfall
+let cum = 0, n = 0; for (const x of mr.cuts) { if (cum >= mr.short) break; cum += x.net; n++; }
+const expectN = cum >= mr.short ? n : null;
+ok('B: cuts-needed count matches the net figures', mr.cutsNeeded === expectN, mr.cutsNeeded + ' vs ' + expectN);
+const roomText = strip(B.run('makeRoomModal()()'));
+const line = roomText.match(/You'd need (\d+) of these cuts to cover the \S+ shortfall\.|Even all \d+ of these cuts net only \S+, short of \S+: restructure first\./);
+ok('B: make-room screen states how many cuts it would take', !!line && (expectN ? line[1] === String(expectN) : /Even all/.test(line[0])), roomText.slice(0, 600));
+ok('B: restructures listed before cuts', roomText.indexOf('Restructures') < roomText.indexOf('Cut options'));
+console.log('  ' + (line ? line[0] : '(no line)'));
+console.log('  cut options:', mr.cuts.map(x => `${x.p.name} (${x.p.ovr}${x.starter ? ', starter' : ''}): saves ${B.run(`fmtM(${x.saves})`)} - refill ${B.run(`fmtM(${x.replacement})`)} = net ${B.run(`fmtM(${x.net})`)}`).join('; '));
 const best = mr.restructures[0];
 B.run(`restructurePlayer(P("${best.p.id}"), Cap.restructureMax(P("${best.p.id}"), S.year, P("${best.p.id}").exp))`);
 const ar2 = B.run('userAutoRoster()');

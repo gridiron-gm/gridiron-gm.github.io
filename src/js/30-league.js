@@ -591,13 +591,18 @@ function makeRoomOptions(abbr) {
   var ros = roster(abbr);
   var rs = ros.map(function (p) { var m = Cap.restructureMax(p, S.year, p.exp), n = Math.min(5, Cap.remaining(p, S.year).length); return { p: p, saves: m - Math.floor(m / Math.max(1, n)) }; })
     .filter(function (x) { return x.saves > 500; }).sort(byKey(function (x) { return x.saves; }, true)).slice(0, 3);
-  // cuts: never players rated 80+; rank by cap freed per rating point lost (vs a ~50-rated minimum-salary
-  // replacement), with starters after every backup
+  // cuts: a cut opens a spot that must be refilled at the minimum, so what matters is NET room (savings
+  // minus that replacement). Never players rated 80+; cuts netting under $250K hidden; backups by net room,
+  // then starters by net room.
+  var repl = Cap.minSalary(FILLER_PRICE_EXP, S.year);
   var cuts = ros.filter(function (p) { return p.ovr < 80; }).map(function (p) {
       var pv = releasePreview(p, false), starter = starters(abbr, p.pos).indexOf(p) >= 0;
-      return { p: p, saves: pv.savings, dead: pv.now, starter: starter, perPoint: pv.savings / Math.max(1, p.ovr - 50) };
+      return { p: p, saves: pv.savings, replacement: repl, net: pv.savings - repl, dead: pv.now, starter: starter };
     })
-    .filter(function (x) { return x.saves > 500; })
-    .sort(function (a, b) { return (a.starter - b.starter) || (b.perPoint - a.perPoint); }).slice(0, 5);
-  return { restructures: rs, cuts: cuts };
+    .filter(function (x) { return x.net >= 250; })
+    .sort(function (a, b) { return (a.starter - b.starter) || (b.net - a.net); }).slice(0, 5);
+  // how many of the listed cuts (in order) it takes to cover the current shortfall
+  var short = rosterFill(abbr).short, cum = 0, cutsNeeded = 0;
+  for (var c = 0; c < cuts.length && cum < short; c++) { cum += cuts[c].net; cutsNeeded++; }
+  return { restructures: rs, cuts: cuts, short: short, cutsNeeded: short > 0 && cum >= short ? cutsNeeded : (short > 0 ? null : 0), cutsTotal: sumBy(cuts, function (x) { return x.net; }) };
 }
