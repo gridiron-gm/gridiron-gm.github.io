@@ -397,12 +397,13 @@ function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 1500; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
-    var teams = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+    var full = function (a) { return roster(a).length >= rosterMax(); };
+    var teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
       .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
       .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
     if (!teams.length) {
       // nobody has the room: the team that needs him most makes room (restructures, then cuts lesser players)
-      var needy = aiTeams().filter(function (a) { return a !== S.user && roster(a).length < rosterMax(); })
+      var needy = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
         .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
       if (!needy) return;
       aiCapFix(needy, floor + 1500 + Math.max(0, space(needy) - fullSpace(needy)));
@@ -410,6 +411,7 @@ function aiLateMarket() {
       teams = [{ a: needy, room: lateRoom(needy) }];
     }
     var price = Math.min(ask, teams[0].room);
+    if (full(teams[0].a)) cutdownOne(teams[0].a, p.pos);   // in season: release the weakest player elsewhere first
     sign(p, teams[0].a, { years: 1, total: price, bonus: 0, gtd: Math.round(price * 0.5) }, true);
   });
 }

@@ -38,6 +38,7 @@ function advance() {
       aiTeams().forEach(function (a) { cutdown(a); });
       S.phase = 'season';                      // top-51 rule ends: every contract counts now
       aiTeams().forEach(function (a) { aiCapFix(a, 500); });
+      aiLateMarket();                          // last pass: anyone a week-1 cap clean-up let go
       aiPrepay(15000);
       resetSeason();
       break;

@@ -143,7 +143,7 @@ for yr in (2024, 2025, 2026):
         stats[yr][r['player_id']] = r
 
 SNAP_YEARS = (2024, 2025, 2026)
-snaps = {yr: defaultdict(lambda: {'g': 0, 'off': 0.0, 'def': 0.0, 'st': 0.0}) for yr in SNAP_YEARS}
+snaps = {yr: defaultdict(lambda: {'g': 0, 'off': 0.0, 'def': 0.0, 'st': 0.0, 'g_off': 0, 'g_def': 0, 'g_st': 0}) for yr in SNAP_YEARS}
 team_games = {yr: defaultdict(set) for yr in SNAP_YEARS}
 for yr in SNAP_YEARS:
     for r in csv.DictReader(open(os.path.join(RAW, f'snap_counts_{yr}.csv'))):
@@ -153,6 +153,8 @@ for yr in SNAP_YEARS:
         if not g: continue
         s = snaps[yr][g]
         s['g'] += 1; s['off'] += fnum(r['offense_pct']); s['def'] += fnum(r['defense_pct']); s['st'] += fnum(r['st_pct'])
+        for side, col in (('off', 'offense_pct'), ('def', 'defense_pct'), ('st', 'st_pct')):
+            if fnum(r[col]) > 0: s['g_' + side] += 1
 games_in = {yr: max(len(v) for v in team_games[yr].values()) for yr in SNAP_YEARS}
 
 def snap_share(g, yr, side):
@@ -200,7 +202,7 @@ def features(g, pos, yrs=((2025, 0.45), (2026, 0.55))):
         elif pos == 'K':
             att = fnum(s.get('fg_att'))
             f['acc'] = fnum(s.get('fg_made')) / att if att >= 5 else 0.78
-            f['long'] = fnum(s.get('fg_made_50_59')) + fnum(s.get('fg_made_60_'))
+            f['long'] = fnum(s.get('fg_made_50_59')) + 2 * fnum(s.get('fg_made_60_'))   # 60+ range counts double
         elif pos == 'P':
             pa = fnum(s.get('pt_att'))
             f['net'] = fnum(s.get('pt_net_yards')) / pa if pa >= 10 else 38
@@ -256,47 +258,119 @@ for g, c in contracts.items():
     p['_fp'] = features(g, pos, ((2024, 0.4), (2025, 0.6)))
     players.append(p)
 
-# z-score features within position, blend, percentile-map to an overall
 by_pos = defaultdict(list)
 for p in players: by_pos[p['pos']].append(p)
 
-def to_ovr(pct):
-    # percentile within position (all players incl. backups) -> overall.
-    # ~95th pct -> 93, 90th -> 88, 75th -> 74, median -> 56
-    return round(42 + 57 * pct ** 2.6)
+# ---------- on-field rating ----------
+# 1. Production per season (2024, 2025, 2026-to-date), as rates per game PLAYED; snap share is the average
+#    share in games he appeared in, so missed games never lower a rating.
+# 2. Track record: Pro Bowls / All-Pros (fading with age), draft slot early in a career, contract rank later.
+# 3. Small samples lean on the track record. One league-wide scale maps the blended score to a rating.
+RATE_YEARS = {2024: 0.25, 2025: 0.40, 2026: 0.35}          # recency weights
+STARTER_SLOTS = {'QB': 1, 'RB': 1, 'WR': 3, 'TE': 1, 'OT': 2, 'IOL': 3, 'EDGE': 2, 'DL': 2, 'LB': 2, 'CB': 3, 'S': 2, 'K': 1, 'P': 1, 'LS': 1}
+OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
+def side_of(pos): return 'off' if pos in OFF_POS else 'st' if pos in ('K', 'P', 'LS') else 'def'
+RWEIGHTS = dict(WEIGHTS)
+RWEIGHTS['CB'] = {'snap': 1.3, 'ball': 0.35}                # INT/PD also measure being targeted: keep small
+RWEIGHTS['S'] = {'snap': 1.2, 'ball': 0.35, 'tk': 0.2}
+RWEIGHTS['K'] = {'acc': 1.0, 'long': 1.0, 'snap': 0.1}       # accuracy and range (50+ yard makes)
+PROD_W = {'OT': 0.45, 'IOL': 0.45, 'LS': 0.3, 'LB': 0.8}     # how much stats can separate players here
+
+def season_rate(g, pos, yr):
+    sn = snaps[yr].get(g); side = side_of(pos)
+    gp_snap = sn['g_' + side] if sn else 0
+    gp = max(gp_snap, int(fnum(stats[yr].get(g, {}).get('games'))))
+    if gp == 0: return None, 0
+    f = features(g, pos, ((yr, 1.0),))                      # per-game stat features for that season
+    f['snap'] = (sn[side] / gp_snap) if gp_snap else 0.0     # share of snaps in games he played
+    return f, gp
+
+ovr_overrides = {}
+pb_now, ap_now = {}, {}
+for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
+    if r['gsis_id']:
+        if r['probowls'].isdigit(): pb_now[r['gsis_id']] = int(r['probowls'])
+        if r['allpro'].isdigit(): ap_now[r['gsis_id']] = int(r['allpro'])
+_ovp = os.path.join(ROOT, 'data', 'overrides.csv')
+if os.path.exists(_ovp):
+    for r in csv.DictReader(open(_ovp)):
+        if r['field'] == 'pb': pb_now[r['gsis_id']] = int(r['value'])
+
+for p in players:
+    p['_seasons'] = {}
+    for yr in RATE_YEARS:
+        f, gp = season_rate(p['id'], p['pos'], yr)
+        if f: p['_seasons'][yr] = (f, gp)
+
+def zscore(vals):
+    m = st.mean(vals); sd = st.pstdev(vals) or 1.0
+    return m, sd
 
 for pos, lst in by_pos.items():
-    w = WEIGHTS[pos]
-    regs = [p for p in lst if p['_f'].get('snap', 0) > 0.15] or lst
-    mu = {f: st.mean(p['_f'].get(f, 0) for p in regs) for f in w}
-    sd = {f: (st.pstdev(p['_f'].get(f, 0) for p in regs) or 1) for f in w}
-    def rookie_deal(p):
-        return p['draft'][0] and p['signed'] == p['draft'][0]
+    w = RWEIGHTS[pos]
+    # production z per season, against that season's regulars at the position
+    for yr in RATE_YEARS:
+        regs = [p for p in lst if yr in p['_seasons'] and p['_seasons'][yr][1] >= 4 and p['_seasons'][yr][0]['snap'] >= 0.3]
+        if len(regs) < 5: continue
+        mu = {f: st.mean(p['_seasons'][yr][0].get(f, 0) for p in regs) for f in w}
+        sd = {f: (st.pstdev(p['_seasons'][yr][0].get(f, 0) for p in regs) or 1) for f in w}
+        for p in lst:
+            if yr in p['_seasons']:
+                f, gp = p['_seasons'][yr]
+                z = sum(w[k_] * (f.get(k_, 0) - mu[k_]) / sd[k_] for k_ in w) / sum(w.values())
+                p['_seasons'][yr] = (f, gp, z)
+    # track-record prior
+    def rookie_deal(p): return p['draft'][0] and p['signed'] == p['draft'][0]
     vet_apy = sorted(p['apy'] for p in lst if not rookie_deal(p))
-    # how much the stats can tell apart players at this position (OL/LB stats say little)
-    stat_w = {'OT': 0.45, 'IOL': 0.45, 'LB': 0.7, 'LS': 0.3}.get(pos, 1.0)
     for p in lst:
-        z = sum(w[f] * (p['_f'].get(f, 0) - mu[f]) / sd[f] for f in w) / sum(w.values())
-        # prior = how the league itself values him: veteran contract size, or draft slot for rookie deals
-        if rookie_deal(p):
-            pick = p['draft'][2] or 260
-            prior = (1 - math.log(pick) / math.log(260)) * 2.2 - 1.0
+        pb, ap = pb_now.get(p['id'], 0), ap_now.get(p['id'], 0)
+        fade = 1.0 if p['age'] <= 30 else max(0.3, 1 - 0.15 * (p['age'] - 30))
+        honors = (min(pb, 4) / 2 + 0.5 * min(ap, 2)) * fade
+        pick = p['draft'][2] or 0
+        draft = (1 - math.log(pick) / math.log(260)) if pick else 0.0
+        if rookie_deal(p) or not vet_apy:
+            market = draft
         else:
-            apy_pct = sum(1 for a in vet_apy if a <= p['apy']) / max(1, len(vet_apy))
-            prior = (apy_pct - 0.5) * 2.2
-        played = p['_f'].get('snap', 0)
-        trust = min(1.0, played / 0.45) * stat_w   # little playing time or weak stats -> lean on the prior
-        p['_score'] = trust * z + (1 - trust) * prior
-    scores = sorted(p['_score'] for p in lst)
-    n = len(scores)
+            apy_pct = sum(1 for a in vet_apy if a <= p['apy']) / len(vet_apy)
+            dw = max(0.0, 1 - p['exp'] / 6)                  # draft slot matters less each year
+            market = dw * draft + (1 - dw) * apy_pct
+        p['_prior_raw'] = honors + 1.4 * market
+    m, sd = zscore([p['_prior_raw'] for p in lst])
+    pw = PROD_W.get(pos, 1.0)
     for p in lst:
-        pct = (sum(1 for s in scores if s < p['_score']) + 0.5) / n
-        ovr = to_ovr(pct)
-        if p['age'] >= 33: ovr -= (p['age'] - 32)  # decline already baked in a little for old vets
-        p['ovr'] = max(40, min(99, ovr))
-        # potential: youth upside
-        up = max(0, 27 - p['age']) * 2.2
-        p['pot'] = min(99, max(p['ovr'], round(p['ovr'] + up)))
+        prior = (p['_prior_raw'] - m) / sd
+        num = den = games = 0.0
+        for yr, rw in RATE_YEARS.items():
+            sea = p['_seasons'].get(yr)
+            if sea and len(sea) == 3:
+                num += rw * sea[1] * sea[2]; den += rw * sea[1]
+                games += sea[1] * (0.6 if yr == 2024 else 1.0)
+        prod = num / den if den else prior
+        rel = games / (games + 12.0) * pw                    # 12 games ~ half trust; less where stats are weak
+        p['_score'] = rel * (0.7 * prod + 0.3 * prior) + (1 - rel) * prior
+        p['_prod'] = prod; p['_games'] = games
+    # put positions on one scale: distance above this position's starter-level group (32 teams x starters
+    # x 1.5, so a deep pool of fringe backups doesn't compress the top of thin positions like QB)
+    n_st = int(32 * STARTER_SLOTS.get(pos, 1) * 1.5)
+    top = sorted((p['_score'] for p in lst), reverse=True)[:max(8, n_st)]
+    m, sd = zscore(top)
+    spec = 0.6 if pos in ('K', 'P', 'LS') else 1.0           # specialists: narrow range of impact
+    for p in lst: p['_z'] = (p['_score'] - m) / sd * spec
+
+# one league-wide scale: rank everyone together, then map rank -> rating through fixed anchors
+# (about 3 players 97+, 8 at 95+, 70 at 90+, starters averaging the mid-70s, backups 55-70)
+ANCHORS = [(1, 99), (3, 97), (8, 95), (25, 93), (70, 90), (160, 85), (320, 79), (520, 74), (800, 68), (1150, 62), (1600, 56), (2100, 50), (2600, 45)]
+def rank_to_ovr(rk):
+    for (r0, o0), (r1, o1) in zip(ANCHORS, ANCHORS[1:]):
+        if rk <= r1: return o0 + (o1 - o0) * (rk - r0) / (r1 - r0)
+    return ANCHORS[-1][1]
+# kickers, punters and snappers share the scale but top out lower (their range of impact is narrow)
+POS_CAP = {'K': 92, 'P': 88, 'LS': 80}
+pool = sorted(players, key=lambda p: -p['_z'])
+for i, p in enumerate(pool):
+    p['ovr'] = int(math.floor(min(POS_CAP.get(p['pos'], 99), max(40, rank_to_ovr(i + 1))) + 1e-9))
+    up = max(0, 27 - p['age']) * 2.2                          # potential: youth upside
+    p['pot'] = min(99, max(p['ovr'], round(p['ovr'] + up)))
 
 # ---------- market value (separate from the on-field rating) ----------
 # How the real NFL values each player, using only information from before the 2026 free-agency period:
@@ -466,7 +540,7 @@ for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
 OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 for p in players:
     p['line26'] = statline(p['id'], p['pos'])
-    del p['_f']; del p['_score']; del p['_fp']; del p['_prod']; del p['_prodPct']
+    for k_ in ('_f', '_score', '_fp', '_prod', '_prodPct', '_seasons', '_prior_raw', '_games', '_z'): p.pop(k_, None)
     p['pb'] = pro_bowls.get(p['id'], 0)
     if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
         side = 'off' if p['pos'] in OFF_POS else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'

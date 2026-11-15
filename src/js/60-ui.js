@@ -52,6 +52,8 @@ function render() {
   if (UI.modal) html += '<div class="overlay" data-act="close-bg"><div class="modal">' + UI.modal() + '</div></div>';
   html += importInput() + '</div>';
   $app().innerHTML = html;
+  // any change of screen (menu, tab bar, or a game action that switches screens) starts at the top
+  if (UI._lastView !== UI.view) { UI._lastView = UI.view; window.scrollTo(0, 0); }
   scheduleSave();
 }
 var ICONS = { hub: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', roster: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
@@ -430,13 +432,13 @@ function tradeSide(abbr, side, key, title) {
     if (!left.length) return;
     h += '<select class="addpick" data-act="trade-pick" data-side="' + key + '" aria-label="Add a ' + y + ' pick"><option value="">+ ' + y + ' pick</option>' + left.map(function (k) { return '<option value="' + k.id + '">' + pickLabel(k) + '</option>'; }).join('') + '</select>';
   });
-  h += '</div><div class="tablewrap short"><table><tbody>';
+  h += '</div><p class="muted small tnote">Cap hit = what the receiving team takes on (salary only; the old team keeps the bonus as dead money).</p><div class="tablewrap short"><table><tbody>';
   ros.forEach(function (p) {
     var on = side.players.indexOf(p.id) >= 0;
     var tc = Cap.tradeCost(p, S.year, post);
     h += '<tr class="' + (on ? 'sel' : '') + '"><td class="cb"><input type="checkbox" data-act="trade-toggle" data-side="' + key + '" data-kind="players" data-id="' + p.id + '"' + (on ? ' checked' : '') + ' aria-label="Include ' + esc(p.name) + '"></td><td><button class="link" data-act="player" data-id="' + p.id + '">' + esc(p.name) + '</button></td><td>' + p.pos + '</td><td class="hide-sm r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="r">' + fmtM(tc.newHit) + '</td><td class="r muted hide-sm">' + yrsLeftStr(p) + '</td></tr>';
   });
-  return h + '</tbody></table></div><p class="muted small">Cap hit = what the receiving team takes on (salary only; the old team keeps the bonus as dead money).</p></section>';
+  return h + '</tbody></table></div></section>';
 }
 
 // ---------- draft ----------
