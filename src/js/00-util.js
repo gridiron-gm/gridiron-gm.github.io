@@ -18,6 +18,35 @@ var TEAMS = [
   ['TEN', 'Tennessee Titans', 'AFC', 'South', '#4B92DB'], ['WAS', 'Washington Commanders', 'NFC', 'East', '#5A1414'],
 ].map(function (t) { return { abbr: t[0], name: t[1], conf: t[2], div: t[3], color: t[4] }; });
 var TEAM = {}; TEAMS.forEach(function (t) { TEAM[t.abbr] = t; });
+// Official primary and secondary colors (no logos). `color` above stays the bright chip color.
+var TEAM_COLORS = {
+  ARI: ['#97233F', '#FFB612'], ATL: ['#A71930', '#A5ACAF'], BAL: ['#241773', '#9E7C0C'], BUF: ['#00338D', '#C60C30'],
+  CAR: ['#0085CA', '#BFC0BF'], CHI: ['#0B162A', '#C83803'], CIN: ['#FB4F14', '#000000'], CLE: ['#311D00', '#FF3C00'],
+  DAL: ['#003594', '#869397'], DEN: ['#FB4F14', '#002244'], DET: ['#0076B6', '#B0B7BC'], GB: ['#203731', '#FFB612'],
+  HOU: ['#03202F', '#A71930'], IND: ['#002C5F', '#A2AAAD'], JAX: ['#006778', '#D7A22A'], KC: ['#E31837', '#FFB81C'],
+  LV: ['#000000', '#A5ACAF'], LAC: ['#0080C6', '#FFC20E'], LA: ['#003594', '#FFA300'], MIA: ['#008E97', '#FC4C02'],
+  MIN: ['#4F2683', '#FFC62F'], NE: ['#002244', '#C60C30'], NO: ['#D3BC8D', '#101820'], NYG: ['#0B2265', '#A71930'],
+  NYJ: ['#125740', '#FFFFFF'], PHI: ['#004C54', '#A5ACAF'], PIT: ['#FFB612', '#101820'], SF: ['#AA0000', '#B3995D'],
+  SEA: ['#002244', '#69BE28'], TB: ['#D50A0A', '#FF7900'], TEN: ['#0C2340', '#4B92DB'], WAS: ['#5A1414', '#FFB612'],
+};
+function hexLum(hex) {
+  var c = hex.replace('#', ''), v = [0, 2, 4].map(function (i) { var x = parseInt(c.substr(i, 2), 16) / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+  return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+}
+function mixHex(hex, to, t) {
+  var a = hex.replace('#', ''), b = to.replace('#', ''), out = '#';
+  for (var i = 0; i < 6; i += 2) { var x = Math.round(parseInt(a.substr(i, 2), 16) * (1 - t) + parseInt(b.substr(i, 2), 16) * t); out += ('0' + x.toString(16)).slice(-2); }
+  return out;
+}
+// CSS variables for a team: band (primary), accent readable on the dark UI, and text colors on each.
+function teamVars(abbr) {
+  var c = TEAM_COLORS[abbr] || ['#2a3442', '#7aa2d6'], c1 = c[0], c2 = c[1];
+  var acc = hexLum(c2) >= 0.1 ? c2 : hexLum(c1) >= 0.1 ? c1 : mixHex(c1, '#ffffff', 0.45);
+  var band = hexLum(c1) < 0.02 ? mixHex(c1, '#1b2431', 0.35) : c1;   // keep near-black bands from vanishing
+  // links/text in the accent: lighten it so it reads as a link, not as a red warning
+  var accText = mixHex(acc, '#ffffff', hexLum(acc) < 0.3 ? 0.45 : 0.15);
+  return '--tc1:' + band + ';--tc2:' + c2 + ';--acc:' + acc + ';--acc-text:' + accText + ';--on-tc1:' + (hexLum(band) > 0.4 ? '#101418' : '#ffffff') + ';--on-acc:' + (hexLum(acc) > 0.4 ? '#101418' : '#ffffff');
+}
 
 var POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL', 'EDGE', 'DL', 'LB', 'CB', 'S', 'K', 'P', 'LS'];
 var POS_LABEL = { OT: 'OT', IOL: 'IOL', EDGE: 'EDGE', DL: 'DL' };
@@ -48,4 +77,4 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function
 function sumBy(arr, f) { var s = 0; for (var i = 0; i < arr.length; i++) s += f(arr[i]); return s; }
 function byKey(f, desc) { return function (a, b) { var x = f(a), y = f(b); return desc ? (y > x ? 1 : y < x ? -1 : 0) : (x > y ? 1 : x < y ? -1 : 0); }; }
 function clamp(x, a, b) { return Math.max(a, Math.min(b, x)); }
-function chip(abbr) { var t = TEAM[abbr]; return t ? '<span class="chip" style="background:' + t.color + '"></span>' : ''; }
+function chip(abbr) { var c = TEAM_COLORS[abbr]; return c ? '<span class="chip" style="background:' + c[0] + ';border-color:' + c[1] + '"></span>' : ''; }
