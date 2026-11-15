@@ -24,6 +24,8 @@ for (let s = 0; s < seasons; s++) {
       if (S.phase === 'season' && S.week === 1) {
         if (freeAgents().some(function(p){return p.ovr>=80 && p.age<30})) log.push('CHECK unsigned young 80+');
         if (TEAMS.some(function(t){return t.abbr !== S.user && space(t.abbr) < 0})) log.push('CHECK AI team over cap');
+        var avgSp = sumBy(TEAMS.filter(function(t){return t.abbr !== S.user}), function(t){return space(t.abbr)}) / 31;
+        if (avgSp < 5000 || avgSp > 30000) log.push('CHECK avg space ' + fmtM(avgSp));
         log.push('rosters ' + TEAMS.map(function(t){return roster(t.abbr).length}).join(','));
         var over = TEAMS.filter(function(t){return space(t.abbr) < 0}).map(function(t){return t.abbr + ' ' + fmtM(space(t.abbr))});
         log.push('over cap: ' + (over.join('; ') || 'none'));
@@ -46,6 +48,7 @@ for (let s = 0; s < seasons; s++) {
   check('champion crowned', !!out.h.champ);
   check('no unsigned 80+ players under 30 at week 1', !out.log.some(l => l === 'CHECK unsigned young 80+'));
   check('every AI team under the cap at week 1', !out.log.some(l => l === 'CHECK AI team over cap'));
+  check('average week-one cap space $5-30M per team', !out.log.some(l => /^CHECK avg space/.test(l)), (out.log.find(l => /^CHECK avg space/.test(l)) || ''));
 }
 console.log(`${seasons} seasons in ${Date.now() - t0} ms; ${fail} failures`);
 process.exit(fail ? 1 : 0);

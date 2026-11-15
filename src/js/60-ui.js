@@ -624,7 +624,7 @@ function importSave(file) {
       var o = JSON.parse(reader.result);
       if (o.app !== 'nfl-gm' || !o.S || !o.BASE || !o.S.players || !o.S.teams) throw new Error('not a save');
       if (S && !confirm('Load this save (' + o.S.user + ', ' + o.S.year + ')? It replaces the game in progress.')) return;
-      S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+      S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); Market.setDriftScale(S.driftScale || Market.calibrateDrift(S.players)); RNG.s = S.rng || S.seed;
       UI.view = 'hub'; UI.modal = null; UI.trade = null;
       flash('Save loaded: ' + TEAM[S.user].name + ', ' + S.year + '.');
       saveGame(); render();
@@ -649,7 +649,7 @@ function loadGame() {
     var raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
     var json = raw.slice(0, 3) === 'lz:' ? LZString.decompressFromUTF16(raw.slice(3)) : raw;
     var o = JSON.parse(json);
-    S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); RNG.s = S.rng || S.seed;
+    S = o.S; BASE = o.BASE; reindex(); Market.setCurve(BASE.curve); Market.setScale(S.payScale || 1); Market.setDriftScale(S.driftScale || Market.calibrateDrift(S.players)); RNG.s = S.rng || S.seed;
     UI.view = 'hub';
     return true;
   } catch (e) { console.warn('load failed', e); return false; }

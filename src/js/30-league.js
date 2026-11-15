@@ -35,6 +35,7 @@ function newGame(data, userAbbr, seed) {
   });
   // pay level: veterans' fair salaries ~88% of the league's cap (rookie deals and minimums fill the rest)
   S.payScale = 1;   // pay multiplier retired: market value + the fitted salary curve set prices
+  S.driftScale = Market.calibrateDrift(S.players);   // market-value drift level matches the real starting market
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });
   news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
   return S;
@@ -347,13 +348,16 @@ function aiResign() {
       var want = p.ovr >= 62 && p.age <= 32 && (needAt(abbr, p.pos, p.ovr) > 0 || p.ovr >= 74);
       if (!want || RNG.next() > (p.ovr >= 75 ? 0.92 : 0.75)) return;
       var off = aiOffer(p, abbr, 1.0);
-      if (space(abbr) - Cap.buildContract(off, S.year, p.exp)[0].cap > 8000) sign(p, abbr, off, true);
+      if (space(abbr) - Cap.buildContract(off, S.year, p.exp)[0].cap > aiReserve(abbr)) sign(p, abbr, off, true);
     });
   });
   S.players.forEach(function (p) { if (!p.team) p.rights = null; });
 }
 
 // One day of free agency: AI teams sign the best fits they can afford.
+// What an AI front office holds back: the cost to fill 53 (unsigned picks at slot + open spots at the
+// minimum) plus a ~$9M cushion for week 1.
+function aiReserve(abbr) { return rosterFill(abbr).need + 9000; }
 function aiFreeAgencyDay() {
   var order = RNG.shuffle(aiTeams());
   var pool = freeAgents().sort(byKey(function (p) { return p.ovr; }, true));
@@ -361,9 +365,9 @@ function aiFreeAgencyDay() {
   for (var round = 0; round < 4; round++) {
     order.forEach(function (abbr) {
       if (roster(abbr).length >= rosterMax() - 2) return;
-      var sp = space(abbr);
-      // teams keep ~$8M of room through the first days of free agency, then spend down further
-      var target = (S.phase === 'fa' && S.faDay < 3 ? 8000 : 3000) + rookieRoom;
+      var sp = S.phase === 'preseason' ? Math.min(space(abbr), fullSpace(abbr)) : space(abbr);   // preseason: week-1 counting
+      // teams keep enough to fill the roster (draft picks + minimum-salary spots) plus a cushion
+      var target = aiReserve(abbr) + (S.phase === 'fa' && S.faDay < 3 ? 4000 : 0);
       var disc = 1 - Market.faDiscount(S.faDay);
       if (sp <= target) return;
       var best = null, bestScore = 0;
@@ -393,7 +397,7 @@ function aiFreeAgencyDay() {
 // Late market (preseason): good players still unsigned take one-year "prove-it" deals for whatever room
 // a team has, as long as it reaches about a third of their ask. Teams with the most room go first.
 // room that will still be there at week 1, when every contract counts (not just the top 51)
-function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 1500; }
+function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
@@ -406,7 +410,7 @@ function aiLateMarket() {
       var needy = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
         .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
       if (!needy) return;
-      aiCapFix(needy, floor + 1500 + Math.max(0, space(needy) - fullSpace(needy)));
+      aiCapFix(needy, floor + 4000 + Math.max(0, space(needy) - fullSpace(needy)));
       if (lateRoom(needy) < floor) return;
       teams = [{ a: needy, room: lateRoom(needy) }];
     }
@@ -469,13 +473,15 @@ function aiFillRoster(target, teams) {
     var guard = 0, slots = target - roster(abbr).length;
     // if the normal plan doesn't fit the room, fill frugally (minimum-ish players) so as many spots as
     // possible get filled
-    var avail = abbr === S.user && !S.autopilot ? Math.min(space(abbr), fullSpace(abbr)) : space(abbr);
+    var userTeam = abbr === S.user && !S.autopilot;
+    var cushion = userTeam ? 0 : 9000;                          // AI teams fill while keeping a week-1 cushion
+    var avail = userTeam ? Math.min(space(abbr), fullSpace(abbr)) : Math.min(space(abbr), fullSpace(abbr)) - cushion;
     var frugal = slots > 0 && planFill(abbr, slots, avail) > avail;
     while (roster(abbr).length < target && guard++ < 80) {
       var counts = {};
       roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
       var pos = fillNeedPos(counts);
-      var ch = fillChoice(pos, fillBudget(space(abbr), target - roster(abbr).length), null, frugal);
+      var ch = fillChoice(pos, fillBudget(Math.min(space(abbr), fullSpace(abbr)) - cushion, target - roster(abbr).length), null, frugal);
       var p = ch.p, price = ch.price;
       var fillPrice = Cap.minSalary(FILLER_PRICE_EXP, S.year);
       // the user's auto-fill must still fit at week 1, when every contract counts (not just the top 51);

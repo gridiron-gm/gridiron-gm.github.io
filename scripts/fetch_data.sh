@@ -14,3 +14,4 @@ get $B/rosters/roster_$START.csv roster_$START.csv     # appears once the new le
 for y in $PREV2 $PREV; do get $B/stats_player/stats_player_reg_$y.csv stats_player_reg_$y.csv; done
 for y in $PREV3 $PREV2 $PREV; do get $B/snap_counts/snap_counts_$y.csv snap_counts_$y.csv; done
 get https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv games.csv
+get $B/pfr_advstats/advstats_season_def.csv advstats_season_def.csv   # coverage: targets, yards/target, rating allowed

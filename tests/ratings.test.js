@@ -27,7 +27,7 @@ const ELITE = ['Patrick Mahomes', 'Josh Allen:QB', 'Joe Burrow', 'Lamar Jackson'
   'CeeDee Lamb', 'Amon-Ra St. Brown', 'Puka Nacua', 'Trey McBride', 'Brock Bowers', 'George Kittle', 'Saquon Barkley', 'Jahmyr Gibbs', 'Bijan Robinson',
   'Fred Warner', 'Roquan Smith', 'Kyle Hamilton', 'Dexter Lawrence', 'Chris Jones:DL'];
 // Real 2026 reasons a consensus-elite player can sit below 88 (reported, not forced). Must still be 85+.
-const EXCEPTIONS = { 'Jalen Hurts': 'played 5 of 9 games so far in 2026 with below-average production' };
+const EXCEPTIONS = {};
 const rows = [];
 for (const e of ELITE) {
   const [name, pos] = e.split(':');
@@ -43,6 +43,21 @@ console.log('  elite: ' + rows.join(', '));
 const K = P.filter(p => p.pos === 'K'), aubrey = K.find(p => p.name === 'Brandon Aubrey');
 const higher = K.filter(p => p.ovr > aubrey.ovr).length;
 ok(`Brandon Aubrey a top-3 kicker (${higher} rated higher, ${aubrey.ovr})`, higher <= 2);
+
+// position ceilings: each position's best lands around 93-97 (specialists lower)
+const POS = ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL', 'EDGE', 'DL', 'LB', 'CB', 'S'];
+const tops = POS.map(pos => { const b = P.filter(p => p.pos === pos).sort((a, b) => b.ovr - a.ovr)[0]; return pos + ' ' + b.name + ' ' + b.ovr; });
+console.log('  position bests: ' + tops.join(', '));
+POS.forEach(pos => { const b = P.filter(p => p.pos === pos).sort((a, b) => b.ovr - a.ovr)[0]; ok(`${pos} best ${b.name} in 93-97 (${b.ovr})`, b.ovr >= 93 && b.ovr <= 97); });
+
+// coverage data: Christian Gonzalez a top-5 CB (PFR per-target coverage)
+const cbs = P.filter(p => p.pos === 'CB').sort((a, b) => b.ovr - a.ovr), gz = cbs.find(p => p.name === 'Christian Gonzalez');
+const gzRank = cbs.filter(p => p.ovr > gz.ovr).length + 1;
+ok(`Christian Gonzalez a top-5 CB (rank ${gzRank}, ${gz.ovr})`, gzRank <= 5);
+
+// salary can't prop up a veteran with little recent playing time
+const dw = P.find(p => p.name === 'Deshaun Watson');
+ok(`Deshaun Watson regresses (below 80: ${dw.ovr})`, dw.ovr < 80);
 
 // earlier complaints: no fringe players at the very top
 for (const n of ['Darnell Wright', 'Zyon McCollum', 'Amani Hooker', 'Jaylen Warren', 'Hjalte Froholdt']) {

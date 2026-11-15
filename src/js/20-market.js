@@ -43,8 +43,19 @@ var Market = (function () {
   // the on-field rating. Year 1 comes from real contracts and draft slot (build_data.py); each offseason
   // it moves a third of the way toward the curve value of his rating and season performance.
   function marketShare(p) { return p.mv != null ? p.mv : curveShare(p.pos, p.ovr); }
+  // drift target = curve value scaled to the league's starting market level (driftScale, set at new game:
+  // total real market value / total curve value), so the drift doesn't shrink pay just because the curve
+  // and the real market sit at different levels on the rating scale
+  var driftScale = 1;
+  function setDriftScale(x) { driftScale = x || 1; }
+  function calibrateDrift(players) {
+    var mv = 0, cv = 0;
+    players.forEach(function (p) { if (p.mv != null) { mv += p.mv; cv += curveShare(p.pos, p.ovr); } });
+    driftScale = cv > 0 ? mv / cv * 0.92 : 1;
+    return driftScale;
+  }
   function driftMarketValue(p, perf) {
-    var target = curveShare(p.pos, clamp(p.ovr + (perf || 0), 30, 99));
+    var target = curveShare(p.pos, clamp(p.ovr + (perf || 0), 30, 99)) * driftScale;
     p.mv = Math.round((marketShare(p) + (target - marketShare(p)) / 3) * 1e5) / 1e5;
   }
   // new players (draft picks, generated depth): draft slot plus rating
@@ -141,6 +152,6 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, initialMarketShare: initialMarketShare };
+           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, calibrateDrift: calibrateDrift, setDriftScale: setDriftScale, initialMarketShare: initialMarketShare };
 })();
 if (typeof module !== 'undefined') module.exports = Market;
