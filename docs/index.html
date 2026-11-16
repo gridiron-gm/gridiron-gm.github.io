@@ -803,7 +803,10 @@ var Market = (function () {
       { k: 'length', good: lenPen < 0.03 },
       { k: 'contender', good: win >= 0 },
     ];
-    return { accept: mood >= threshold, mood: mood / threshold, ask: d, notes: notes };
+    // late-market prove-it terms: an offer paying at least the floor share of his ask per year is accepted
+    var lateOk = ctx.lateFloor > 0 && total / yrs >= Math.max(Cap.minSalary(p.exp, ctx.year), d.apy * ctx.lateFloor);
+    if (lateOk) notes.push({ k: 'late-market floor', good: true });
+    return { accept: mood >= threshold || lateOk, mood: lateOk ? Math.max(1, mood / threshold) : mood / threshold, ask: d, notes: notes, lateFloor: ctx.lateFloor ? Math.round(Math.max(Cap.minSalary(p.exp, ctx.year), d.apy * ctx.lateFloor)) : 0 };
   }
 
   // How far a free agent's price has dropped after `days` of free agency (0 at open, ~40% late).
@@ -1070,7 +1073,14 @@ function canExtend(p) { return p.team && Cap.yearsLeft(p, S.year) <= 2 && S.phas
 function offerCtx(p, abbr) {
   return { cap: marketCap(), year: S.year, teamOvr: teamRating(abbr).ovr, isOwnTeam: p.team === abbr || p.rights === abbr,
            rejections: p.rej || 0, fa: S.phase === 'fa' || S.phase === 'draft' || S.phase === 'preseason' || S.phase === 'season',
-           daysIntoFA: S.phase === 'fa' ? S.faDay : S.phase === 'resign' ? 0 : FA_DAYS + 2 };
+           daysIntoFA: S.phase === 'fa' ? S.faDay : S.phase === 'resign' ? 0 : FA_DAYS + 2, lateFloor: lateMarketFloor(p) };
+}
+// Late market (same terms for everyone): an unsigned player under 30 rated 78+ takes a prove-it deal at
+// 25% of his ask in the preseason, or 12% once the season has started (the AI late market already passed
+// on him). Returns that share of the ask, or 0 when the late-market terms don't apply.
+function lateMarketFloor(p) {
+  if (p.team || p.retired || p.prospect || p.age >= 30 || p.ovr < 78) return 0;
+  return S.phase === 'preseason' ? 0.25 : S.phase === 'season' ? 0.12 : 0;
 }
 
 // ---------- trades ----------
@@ -1265,7 +1275,7 @@ function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)
-    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));   // same 25% as lateMarketFloor
     var full = function (a) { return roster(a).length >= rosterMax(); };
     var teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
       .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
@@ -1918,6 +1928,15 @@ function progressDelta(p, perf) {
   if (p.age <= pk[1] + t.peak) return perf * 0.6;                                              // prime
   return -(1.5 + (p.age - (pk[1] + t.peak)) * 1.1) * t.decline + perf * 0.4;                  // decline
 }
+// Late bloomers: each offseason a good young player (26 or under, rated 78+) whose trait didn't promise
+// much may break out: a one-season jump in rating and a higher ceiling. Fast/Elite players already grow.
+var BREAKOUT = { Slow: 0.03, Normal: 0.12, Fast: 0, Elite: 0 };   // the players nobody expected
+function breakout(p) {
+  if (p.age > 26 || p.prospect || p.ovr < 78 || RNG.next() >= BREAKOUT[traitOf(p)]) return;
+  p.ovr = Math.min(99, p.ovr + RNG.int(4, 9));
+  p.pot = Math.min(99, Math.max(p.pot, p.ovr + RNG.int(2, 6)));
+  p.brokeOut = (p.brokeOut || 0) + 1;
+}
 function progress(p, perf) {
   var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
   p.ovr = clamp(Math.round(p.ovr + progressDelta(p, perf)), 30, 99);
@@ -1982,6 +2001,7 @@ function endOfYear() {
       retired.push(p);
       return;
     }
+    breakout(p);
     progress(p, perf[p.id] || 0);
     Market.driftMarketValue(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;
@@ -2382,6 +2402,7 @@ function offerModal(id, mode) {
     var mood = ev.mood >= 1 ? ['g', 'Likely to accept'] : ev.mood >= 0.93 ? ['w', 'Close'] : ['b', 'Not close'];
     var h = '<div class="mhead"><div><h2>' + (mode === 'extend' ? 'Extend ' : p.rights === S.user ? 'Re-sign ' : 'Offer: ') + esc(p.name) + '</h2><p class="muted">' + p.pos + ' · age ' + p.age + ' · OVR ' + p.ovr + ' · asking about ' + fmtM(d.apy) + '/yr for ' + d.years + ' yrs, ' + fmtM(d.gtd) + ' guaranteed</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
     h += '<div class="offergrid">' + field('years', 'Years', o.years, 1, 7, 1) + field('total', 'Total $M', o.total, 0.5, 600, 0.1) + field('bonus', 'Signing bonus $M', o.bonus, 0, 300, 0.1) + field('gtd', 'Guaranteed $M', o.gtd, 0, 600, 0.1) + '</div>';
+    if (mode !== 'extend' && ev.lateFloor) h += '<p class="warn">Late market: he\'ll sign for ' + fmtM(ev.lateFloor) + ' a year or more (' + (S.phase === 'season' ? '12%' : '25%') + ' of his ask), the same prove-it terms AI teams get.</p>';
     if (mode === 'extend') h += '<p class="muted small">Extension starts ' + extensionStart() + '. Prorated bonus already on the books stays in its years.</p>';
     h += '<div class="tablewrap"><table><thead><tr><th>Year</th><th class="r">Base</th><th class="r">Prorated bonus</th><th class="r">Cap hit</th><th class="r">Gtd</th><th class="r">Dead if cut that year</th></tr></thead><tbody>';
     var tmp = { years: yrs };

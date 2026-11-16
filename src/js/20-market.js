@@ -114,7 +114,10 @@ var Market = (function () {
       { k: 'length', good: lenPen < 0.03 },
       { k: 'contender', good: win >= 0 },
     ];
-    return { accept: mood >= threshold, mood: mood / threshold, ask: d, notes: notes };
+    // late-market prove-it terms: an offer paying at least the floor share of his ask per year is accepted
+    var lateOk = ctx.lateFloor > 0 && total / yrs >= Math.max(Cap.minSalary(p.exp, ctx.year), d.apy * ctx.lateFloor);
+    if (lateOk) notes.push({ k: 'late-market floor', good: true });
+    return { accept: mood >= threshold || lateOk, mood: lateOk ? Math.max(1, mood / threshold) : mood / threshold, ask: d, notes: notes, lateFloor: ctx.lateFloor ? Math.round(Math.max(Cap.minSalary(p.exp, ctx.year), d.apy * ctx.lateFloor)) : 0 };
   }
 
   // How far a free agent's price has dropped after `days` of free agency (0 at open, ~40% late).

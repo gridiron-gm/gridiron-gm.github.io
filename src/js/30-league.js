@@ -221,7 +221,14 @@ function canExtend(p) { return p.team && Cap.yearsLeft(p, S.year) <= 2 && S.phas
 function offerCtx(p, abbr) {
   return { cap: marketCap(), year: S.year, teamOvr: teamRating(abbr).ovr, isOwnTeam: p.team === abbr || p.rights === abbr,
            rejections: p.rej || 0, fa: S.phase === 'fa' || S.phase === 'draft' || S.phase === 'preseason' || S.phase === 'season',
-           daysIntoFA: S.phase === 'fa' ? S.faDay : S.phase === 'resign' ? 0 : FA_DAYS + 2 };
+           daysIntoFA: S.phase === 'fa' ? S.faDay : S.phase === 'resign' ? 0 : FA_DAYS + 2, lateFloor: lateMarketFloor(p) };
+}
+// Late market (same terms for everyone): an unsigned player under 30 rated 78+ takes a prove-it deal at
+// 25% of his ask in the preseason, or 12% once the season has started (the AI late market already passed
+// on him). Returns that share of the ask, or 0 when the late-market terms don't apply.
+function lateMarketFloor(p) {
+  if (p.team || p.retired || p.prospect || p.age >= 30 || p.ovr < 78) return 0;
+  return S.phase === 'preseason' ? 0.25 : S.phase === 'season' ? 0.12 : 0;
 }
 
 // ---------- trades ----------
@@ -416,7 +423,7 @@ function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)
-    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));   // same 25% as lateMarketFloor
     var full = function (a) { return roster(a).length >= rosterMax(); };
     var teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
       .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })

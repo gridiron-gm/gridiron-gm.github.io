@@ -211,6 +211,15 @@ function progressDelta(p, perf) {
   if (p.age <= pk[1] + t.peak) return perf * 0.6;                                              // prime
   return -(1.5 + (p.age - (pk[1] + t.peak)) * 1.1) * t.decline + perf * 0.4;                  // decline
 }
+// Late bloomers: each offseason a good young player (26 or under, rated 78+) whose trait didn't promise
+// much may break out: a one-season jump in rating and a higher ceiling. Fast/Elite players already grow.
+var BREAKOUT = { Slow: 0.03, Normal: 0.12, Fast: 0, Elite: 0 };   // the players nobody expected
+function breakout(p) {
+  if (p.age > 26 || p.prospect || p.ovr < 78 || RNG.next() >= BREAKOUT[traitOf(p)]) return;
+  p.ovr = Math.min(99, p.ovr + RNG.int(4, 9));
+  p.pot = Math.min(99, Math.max(p.pot, p.ovr + RNG.int(2, 6)));
+  p.brokeOut = (p.brokeOut || 0) + 1;
+}
 function progress(p, perf) {
   var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
   p.ovr = clamp(Math.round(p.ovr + progressDelta(p, perf)), 30, 99);
@@ -275,6 +284,7 @@ function endOfYear() {
       retired.push(p);
       return;
     }
+    breakout(p);
     progress(p, perf[p.id] || 0);
     Market.driftMarketValue(p, perf[p.id] || 0);
     p.inj = 0; p.injNote = null; p.rej = 0;

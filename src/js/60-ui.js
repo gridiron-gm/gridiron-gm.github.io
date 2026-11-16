@@ -346,6 +346,7 @@ function offerModal(id, mode) {
     var mood = ev.mood >= 1 ? ['g', 'Likely to accept'] : ev.mood >= 0.93 ? ['w', 'Close'] : ['b', 'Not close'];
     var h = '<div class="mhead"><div><h2>' + (mode === 'extend' ? 'Extend ' : p.rights === S.user ? 'Re-sign ' : 'Offer: ') + esc(p.name) + '</h2><p class="muted">' + p.pos + ' · age ' + p.age + ' · OVR ' + p.ovr + ' · asking about ' + fmtM(d.apy) + '/yr for ' + d.years + ' yrs, ' + fmtM(d.gtd) + ' guaranteed</p></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
     h += '<div class="offergrid">' + field('years', 'Years', o.years, 1, 7, 1) + field('total', 'Total $M', o.total, 0.5, 600, 0.1) + field('bonus', 'Signing bonus $M', o.bonus, 0, 300, 0.1) + field('gtd', 'Guaranteed $M', o.gtd, 0, 600, 0.1) + '</div>';
+    if (mode !== 'extend' && ev.lateFloor) h += '<p class="warn">Late market: he\'ll sign for ' + fmtM(ev.lateFloor) + ' a year or more (' + (S.phase === 'season' ? '12%' : '25%') + ' of his ask), the same prove-it terms AI teams get.</p>';
     if (mode === 'extend') h += '<p class="muted small">Extension starts ' + extensionStart() + '. Prorated bonus already on the books stays in its years.</p>';
     h += '<div class="tablewrap"><table><thead><tr><th>Year</th><th class="r">Base</th><th class="r">Prorated bonus</th><th class="r">Cap hit</th><th class="r">Gtd</th><th class="r">Dead if cut that year</th></tr></thead><tbody>';
     var tmp = { years: yrs };

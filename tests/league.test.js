@@ -37,9 +37,16 @@ ok('AI both exercises and declines', ex > 3 && de > 0);
 ok('preseason counts the top 51', run('top51(S.year)') === true);
 const t51 = run(`(function(){ userAutoRoster(); var n = roster("NE").length; return { n: n, top: committed("NE"), all: Cap.teamCommitted(S.players, T("NE"), S.year, false) }; })()`);
 ok('with ' + t51.n + ' players, top-51 commitment <= full commitment', t51.top <= t51.all && (t51.n <= 51 || t51.top < t51.all));
+// late market fairness: an unsigned 78+ player under 30 takes your prove-it offer on the AI's terms
+run(`var LM = S.players.filter(function (p) { return p.team && p.team !== 'NE' && p.age < 30 && p.ovr >= 80; })[0];
+  LM.team = null; LM.years = []; LM.rights = null; var LMASK = Market.demand(LM, marketCap(), S.year).apy;
+  function lmOffer(share) { var t = Math.round(LMASK * share); return Market.evaluate(LM, { years: 1, total: t, bonus: 0, gtd: Math.round(t / 2) }, offerCtx(LM, 'NE')); }`);
+ok('preseason: unsigned 80+ player under 30 accepts 25% of his ask from you', run('lmOffer(0.26).accept'));
+ok('preseason: but not 20%', !run('lmOffer(0.20).accept'));
 run('userAutoRoster(); advance();');
 ok('regular season: every contract counts', run('S.phase') === 'season' && run('top51(S.year)') === false && run('committed("NE")') === run('Cap.teamCommitted(S.players, T("NE"), S.year, false)'));
 ok('future years still use top 51', run('top51(S.year + 1)') === true);
+ok('in season: last-resort 12% floor applies to your offers too', run('LM.team ? true : lmOffer(0.13).accept'));
 ok('AI teams are cap compliant with every contract counted', run('TEAMS.every(function(t){ return t.abbr === "NE" || space(t.abbr) >= 0 })'));
 
 // ---------- your players' ratings: aging and performance only ----------

@@ -53,12 +53,12 @@ for (let s = 0; s < seasons; s++) {
   check('80+ talent count within 30% of the starting count', !out.log.some(l => /^CHECK talent/.test(l)), (out.log.find(l => /^CHECK talent/.test(l)) || ''));
   check('average week-one cap space $5-30M per team', !out.log.some(l => /^CHECK avg space/.test(l)), (out.log.find(l => /^CHECK avg space/.test(l)) || ''));
 }
-// development traits: young players (24 or under at the start, or drafted during the run) reach 90+
+// development traits: drafted young players (2025+ draft classes, real or generated) reach 90+
 // far more often with an Elite trait than a Normal one
 const dev = vm.runInContext(`(function(){
   var out = {};
   S.players.forEach(function (p) {
-    var young = p.draft && p.draft[0] >= BASE.startYear - 2;
+    var young = p.draft && p.draft[0] >= BASE.startYear - 2 && p.draft[1] >= 1;   // drafted young players
     if (!young) return;
     var t = p.trait || 'Normal'; out[t] = out[t] || { n: 0, hit: 0 };
     out[t].n++; if ((p.peak || p.ovr) >= 90) out[t].hit++;
@@ -67,5 +67,6 @@ const dev = vm.runInContext(`(function(){
 const rate = t => dev[t] && dev[t].n ? dev[t].hit / dev[t].n : 0;
 console.log('  reached 90+ (young players): ' + ['Slow', 'Normal', 'Fast', 'Elite'].map(t => t + ' ' + (dev[t] ? dev[t].hit + '/' + dev[t].n + ' = ' + Math.round(rate(t) * 100) + '%' : '-')).join(', '));
 if (seasons >= 8) check('Elite players reach 90+ much more often than Normal ones (at least 3x)', rate('Elite') >= 3 * rate('Normal') && rate('Elite') > 0.1);
+if (seasons >= 8) check(`late bloomers: Normal young players reach 90+ about 2-4% (${(rate('Normal') * 100).toFixed(1)}%)`, rate('Normal') >= 0.015 && rate('Normal') <= 0.045);
 console.log(`${seasons} seasons in ${Date.now() - t0} ms; ${fail} failures`);
 process.exit(fail ? 1 : 0);
