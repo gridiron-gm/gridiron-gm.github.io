@@ -50,6 +50,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc); }
 .rt.big { min-width: 64px; height: 64px; font-size: 30px; border-radius: 14px; }
 .rts .rt { margin-left: 4px; }
 
+/* potential grade and development trait */
+.potg { font-weight: 800; margin-right: 2px; }
+.tile small { font-size: 12px; margin-left: 6px; }
+.dev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--panel3); color: var(--text2); }
+.dev-elite { background: linear-gradient(180deg, #f7d26a, #d9a521); color: #2b1d00; }
+.dev-fast { background: rgba(76, 195, 138, .18); color: var(--good); }
+.dev-slow { background: transparent; color: var(--dim); border: 1px solid var(--line2); }
+.dev-unknown { background: transparent; color: var(--muted); border: 1px dashed var(--line2); }
+
 /* ---------- shell ---------- */
 .shell { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); min-height: 100vh; }
 .side { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: #0b1016; border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column; gap: 14px; }

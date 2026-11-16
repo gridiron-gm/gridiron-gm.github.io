@@ -134,7 +134,7 @@ var Market = (function () {
       var worth = target + (mvNow * Math.pow(1.07, i) - target) * Math.pow(2 / 3, i);
       var cost = rows[i] ? rows[i].cap : worth;             // after the deal ends he'd cost market price
       v += Math.pow(DISCOUNT, i) * (worth * 1.15 - cost);   // surplus
-      v += Math.pow(DISCOUNT, i) * worth * 0.35;            // you also just get a good player
+      v += Math.pow(DISCOUNT, i) * starValue(p.pos, o, capI); // and you get the player: stars count far more
     }
     // remaining guaranteed money/dead money is a liability for the acquirer only through cap cost (already in)
     if (viewer && viewer.rebuilding) v *= p.age <= 26 ? 1.15 : p.age >= 30 ? 0.6 : 0.9;
@@ -142,6 +142,9 @@ var Market = (function () {
   }
 
   // pick: {year, round, ovr (overall pick no., may be estimated)}
+  // Star premium: the value of simply having the player rises much faster than his rating
+  // (one 95 is worth ~4-5x an 82, scaled by how much his position earns).
+  function starValue(pos, ovr, cap) { return cap * TOP_SHARE[pos] * 0.9 * Math.pow(clamp((ovr - 62) / 35, 0, 1), 3); }
   function pickValue(pick, year, viewer) {
     var no = pick.no || (pick.round - 1) * 32 + 16;
     var v = 62000 * Math.exp(-0.0185 * (no - 1)) + 600;
@@ -152,6 +155,6 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, calibrateDrift: calibrateDrift, setDriftScale: setDriftScale, initialMarketShare: initialMarketShare };
+           pickValue: pickValue, starValue: starValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, calibrateDrift: calibrateDrift, setDriftScale: setDriftScale, initialMarketShare: initialMarketShare };
 })();
 if (typeof module !== 'undefined') module.exports = Market;

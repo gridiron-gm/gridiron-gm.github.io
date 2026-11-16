@@ -8,6 +8,20 @@ function flash(msg, bad) { UI.msg = { text: msg, bad: !!bad }; }
 // ---------- formatting ----------
 // Rating badge, colored by tier: 90+ gold, 80s green, 70s blue, 60s gray, under 60 dim.
 function ovrPill(o, big) { var t = o >= 90 ? 't90' : o >= 80 ? 't80' : o >= 70 ? 't70' : o >= 60 ? 't60' : 't50'; return '<span class="rt ' + t + (big ? ' big' : '') + '">' + o + '</span>'; }
+// Potential as a letter grade + range. Young players' ranges are wide and narrow with each season played;
+// the true value sits inside the range (offset by a fixed per-player amount, so the middle isn't a giveaway).
+// Veterans (27+ or 4+ seasons) show the exact number. The trait is "Unknown" until he has played a season.
+var POT_GRADES = [[95, 'A+'], [90, 'A'], [87, 'A-'], [84, 'B+'], [80, 'B'], [77, 'B-'], [74, 'C+'], [70, 'C'], [66, 'C-'], [0, 'D']];
+function potGrade(x) { for (var i = 0; i < POT_GRADES.length; i++) if (x >= POT_GRADES[i][0]) return POT_GRADES[i][1]; return 'D'; }
+function potInfo(p) {
+  var exp = p.prospect ? 0 : (p.exp || 0), known = !p.prospect && exp >= 1;
+  var u = p.age >= 27 || exp >= 4 ? 0 : [6, 4, 2, 1][Math.min(3, exp)];
+  var c = p.pot + (u ? Market.noise(p.id, 'pot') * u / 2 : 0);
+  var lo = Math.min(p.pot, Math.max(p.ovr, Math.round(c - u))), hi = Math.max(p.pot, Math.min(99, Math.round(c + u)));
+  return { known: known, trait: known ? (p.trait || 'Normal') : 'Unknown', grade: potGrade(u ? (lo + hi) / 2 : p.pot), lo: lo, hi: hi, exact: lo === hi };
+}
+function potText(p) { var i = potInfo(p); return '<span class="potg">' + i.grade + '</span> ' + (i.exact ? i.lo : i.lo + '–' + i.hi); }
+function devBadge(p) { var t = potInfo(p).trait; return '<span class="dev dev-' + t.toLowerCase() + '">' + t + '</span>'; }
 function capLabel() { return fmtM(capOf(S.year)) + ' cap (projected)'; }
 function teamLink(a) { return '<span class="tl">' + chip(a) + '<b>' + a + '</b></span>'; }
 function recStr(r) { return r.w + '-' + r.l + (r.t ? '-' + r.t : ''); }
@@ -180,10 +194,10 @@ VIEWS.roster = function () {
   if (UI.posFilter !== 'ALL') ros = ros.filter(function (p) { return p.pos === UI.posFilter; });
   var sorts = { ovr: function (p) { return -p.ovr; }, cap: function (p) { return -Cap.capHit(p, S.year); }, age: function (p) { return p.age; } };
   var h = '<div class="toolbar">' + filterBar('posFilter') + '<label class="sortsel">Sort <select data-act="roster-sort">' + [['pos', 'By position'], ['ovr', 'Rating'], ['cap', 'Cap hit'], ['age', 'Age']].map(function (o) { return '<option value="' + o[0] + '"' + (UI.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
-  var head = '<tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">POT</th><th class="r">' + S.year + ' cap</th><th class="r">Left</th><th class="r hide-sm">Gtd left</th><th class="r hide-sm">Dead if cut</th></tr>';
+  var head = '<tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">Potential</th><th class="hide-sm">Dev</th><th class="r">' + S.year + ' cap</th><th class="r">Left</th><th class="r hide-sm">Gtd left</th><th class="r hide-sm">Dead if cut</th></tr>';
   var row = function (p, starter) {
     var pv = releasePreview(p, false);
-    return '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span>' + (starter ? '<span class="st">S</span>' : '') + statusStr(p) + '<span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted hide-sm">' + p.pot + '</td>' +
+    return '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span>' + (starter ? '<span class="st">S</span>' : '') + statusStr(p) + '<span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="hide-sm">' + potText(p) + '</td><td class="hide-sm">' + devBadge(p) + '</td>' +
       '<td class="r">' + fmtM(Cap.capHit(p, S.year)) + '</td><td class="r">' + yrsLeftStr(p) + '</td><td class="r hide-sm">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td><td class="r hide-sm">' + fmtM(pv.now) + '</td></tr>';
   };
   h += '<div class="tablewrap"><table class="roster"><thead>' + head + '</thead><tbody>';
@@ -195,7 +209,7 @@ VIEWS.roster = function () {
       var order = (depth[pos] || []).filter(function (id) { return grp.some(function (p) { return p.id === id; }); });
       grp.sort(byKey(function (p) { var i = order.indexOf(p.id); return i < 0 ? 999 - p.ovr : i; }));
       var st = starters(S.user, pos).map(function (p) { return p.id; });
-      h += '<tr class="grp"><td colspan="9">' + pos + ' <span>' + grp.length + ' · ' + Market.STARTERS[pos] + ' start</span></td></tr>';
+      h += '<tr class="grp"><td colspan="10">' + pos + ' <span>' + grp.length + ' · ' + Market.STARTERS[pos] + ' start</span></td></tr>';
       grp.forEach(function (p) { h += row(p, st.indexOf(p.id) >= 0); });
     });
   } else {
@@ -256,7 +270,8 @@ function playerModal(id) {
     var h = '<div class="pc-band" style="' + teamVars(p.team || p.rights || S.user) + '">' + ovrPill(p.ovr, true) + '<div class="pc-id"><h2>' + esc(p.name) + '</h2><div>' + p.pos + (p.opos && p.opos !== p.pos ? ' (' + p.opos + ')' : '') + ' · age ' + p.age + ' · ' + who +
       (p.draft && p.draft[1] ? ' · drafted ' + p.draft[0] + ' R' + p.draft[1] + ' #' + p.draft[2] : '') + '</div></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
     var SUB = { pass: 'Passing', acc: 'Accuracy', run: 'Rushing', prod: 'Production', tgt: 'Targets', rec: 'Receiving', rush: 'Pass rush', tkl: 'Tackling', play: 'Playmaking', cov: 'Coverage', pow: 'Leg', net: 'Net punting' };
-    var tiles = [['Potential', ovrPill(p.pot)]].concat(Object.keys(p.sub || {}).slice(0, 2).map(function (k) { return [SUB[k] || k, ovrPill(p.sub[k])]; }));
+    var pi = potInfo(p);
+    var tiles = [['Potential', '<b>' + pi.grade + '</b><small class="muted">' + (pi.exact ? pi.lo : pi.lo + '–' + pi.hi) + '</small>'], ['Dev trait', devBadge(p)]].concat(Object.keys(p.sub || {}).slice(0, 2).map(function (k) { return [SUB[k] || k, ovrPill(p.sub[k])]; }));
     if (p.years && p.years.length) tiles.push(['This year', '<b>' + fmtM(Cap.capHit(p, Y)) + '</b>'], ['Years left', '<b>' + (Cap.yearsLeft(p, Y) || '—') + '</b>'], ['Gtd left', '<b>' + fmtM(Cap.gtdLeft(p, Y)) + '</b>']);
     else tiles.push(['Market value', '<b>' + fmtM(Market.demand(p, marketCap(), Y).apy) + '/yr</b>']);
     h += '<div class="pc-tiles">' + tiles.map(function (t) { return '<div class="tile"><span>' + t[0] + '</span>' + t[1] + '</div>'; }).join('') + '</div>';
@@ -388,10 +403,10 @@ VIEWS.fa = function () {
 };
 function faTable(list, resign) {
   if (!list.length) return '<p class="muted">Nobody here.</p>';
-  var h = '<div class="tablewrap"><table><thead><tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">POT</th><th class="hide-sm">Last team</th><th class="r">Asking/yr</th><th class="r hide-sm">Yrs</th><th class="r hide-sm">Gtd</th><th class="hide-sm"></th></tr></thead><tbody>';
+  var h = '<div class="tablewrap"><table><thead><tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">Potential</th><th class="hide-sm">Last team</th><th class="r">Asking/yr</th><th class="r hide-sm">Yrs</th><th class="r hide-sm">Gtd</th><th class="hide-sm"></th></tr></thead><tbody>';
   list.forEach(function (p) {
     var d = Market.demand(p, marketCap(), S.year), disc = S.phase === 'resign' ? 1 : 1 - Market.faDiscount(offerCtx(p, S.user).daysIntoFA);
-    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span><span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted hide-sm">' + p.pot + '</td><td class="hide-sm">' + (p.prevTeam || p.cutBy || '—') + '</td>' +
+    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span><span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="hide-sm">' + potText(p) + '</td><td class="hide-sm">' + (p.prevTeam || p.cutBy || '—') + '</td>' +
       '<td class="r">' + fmtM(d.apy * disc) + '</td><td class="r hide-sm">' + d.years + '</td><td class="r hide-sm">' + fmtM(d.gtd * disc) + '</td><td class="hide-sm"><button data-act="offer" data-id="' + p.id + '" data-mode="sign">' + (resign ? 'Re-sign' : 'Offer') + '</button></td></tr>';
   });
   return h + '</tbody></table></div><p class="muted small">Tap a player for his card and to make an offer.</p>';
@@ -452,9 +467,9 @@ VIEWS.draft = function () {
   if (S.year === BASE.startYear && BASE.draftOrder) h += '<p class="muted small">Draft order: real ' + (S.year - 1) + ' results' + (BASE.draftOrderFinal ? ' (final).' : ' as of ' + BASE.draftOrderGames + ' of 272 games, provisional until the data is refreshed after the season.') + ' Traded and compensatory picks aren\'t included.</p>';
   h += '<div class="actions">' + (onClock ? '<span class="pill g">You are on the clock</span>' : '<button class="primary" data-act="draft-sim">Sim to my next pick</button>') + '<button data-act="draft-auto">Auto-draft the rest</button></div></section>';
   h += '<section class="card"><h3>Recent picks</h3><ul class="news">' + S.draft.made.slice(-8).reverse().map(function (m) { var p = P(m.id); return '<li>#' + m.no + ' ' + teamLink(m.team) + ' ' + (p ? p.pos + ' ' + esc(p.name) : '') + '</li>'; }).join('') + '</ul></section></div>';
-  h += filterBar('draftPos') + '<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Prospect</th><th>Pos</th><th>Age</th><th>College</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
+  h += filterBar('draftPos') + '<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Prospect</th><th>Pos</th><th class="hide-sm">Age</th><th class="hide-sm">College</th><th>OVR</th><th>Potential</th><th class="hide-sm">Dev</th><th></th></tr></thead><tbody>';
   pool.slice(0, 80).forEach(function (p, i) {
-    h += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + p.pos + '</td><td>' + p.age + '</td><td class="muted">' + esc(p.college) + '</td><td>' + ovrPill(p.ovr) + '</td><td>' + p.pot + '</td><td>' + (onClock ? '<button class="primary" data-act="draft-pick" data-id="' + p.id + '">Draft</button>' : '') + '</td></tr>';
+    h += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + p.pos + '</td><td class="hide-sm">' + p.age + '</td><td class="muted hide-sm">' + esc(p.college) + '</td><td>' + ovrPill(p.ovr) + '</td><td>' + potText(p) + '</td><td class="hide-sm">' + devBadge(p) + '</td><td>' + (onClock ? '<button class="primary" data-act="draft-pick" data-id="' + p.id + '">Draft</button>' : '') + '</td></tr>';
   });
   return h + '</tbody></table></div>';
 };

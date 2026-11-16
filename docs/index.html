@@ -63,6 +63,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--acc); }
 .rt.big { min-width: 64px; height: 64px; font-size: 30px; border-radius: 14px; }
 .rts .rt { margin-left: 4px; }
 
+/* potential grade and development trait */
+.potg { font-weight: 800; margin-right: 2px; }
+.tile small { font-size: 12px; margin-left: 6px; }
+.dev { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--panel3); color: var(--text2); }
+.dev-elite { background: linear-gradient(180deg, #f7d26a, #d9a521); color: #2b1d00; }
+.dev-fast { background: rgba(76, 195, 138, .18); color: var(--good); }
+.dev-slow { background: transparent; color: var(--dim); border: 1px solid var(--line2); }
+.dev-unknown { background: transparent; color: var(--muted); border: 1px dashed var(--line2); }
+
 /* ---------- shell ---------- */
 .shell { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); min-height: 100vh; }
 .side { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: #0b1016; border-right: 1px solid var(--line); padding: 18px 12px; display: flex; flex-direction: column; gap: 14px; }
@@ -537,10 +546,12 @@ var Cap = (function () {
   function buildExtension(p, offer, startYear) {
     var newYears = buildContract(offer, startYear, p.exp);
     var old = remaining(p, startYear);
+    // Real (already paid) proration stays in its years. Pending, unexercised option bonuses of the old deal
+    // are replaced by the new contract, so their cap charges are dropped rather than stacked on top.
     old.forEach(function (o) {
       var r = newYears.filter(function (x) { return x.y === o.y; })[0];
-      if (r) { r.pro += o.pro; r.opt = opt(o); recalc(r); }
-      else newYears.push(recalc({ y: o.y, base: 0, pro: o.pro, opt: opt(o), roster: 0, other: 0, gtd: 0, void: true })); // old proration beyond new term
+      if (r) { r.pro += o.pro; recalc(r); }
+      else if (o.pro > 0) newYears.push(recalc({ y: o.y, base: 0, pro: o.pro, opt: 0, roster: 0, other: 0, gtd: 0, void: true })); // old proration beyond new term
     });
     newYears.sort(function (a, b) { return a.y - b.y; });
     return newYears;
@@ -812,7 +823,7 @@ var Market = (function () {
       var worth = target + (mvNow * Math.pow(1.07, i) - target) * Math.pow(2 / 3, i);
       var cost = rows[i] ? rows[i].cap : worth;             // after the deal ends he'd cost market price
       v += Math.pow(DISCOUNT, i) * (worth * 1.15 - cost);   // surplus
-      v += Math.pow(DISCOUNT, i) * worth * 0.35;            // you also just get a good player
+      v += Math.pow(DISCOUNT, i) * starValue(p.pos, o, capI); // and you get the player: stars count far more
     }
     // remaining guaranteed money/dead money is a liability for the acquirer only through cap cost (already in)
     if (viewer && viewer.rebuilding) v *= p.age <= 26 ? 1.15 : p.age >= 30 ? 0.6 : 0.9;
@@ -820,6 +831,9 @@ var Market = (function () {
   }
 
   // pick: {year, round, ovr (overall pick no., may be estimated)}
+  // Star premium: the value of simply having the player rises much faster than his rating
+  // (one 95 is worth ~4-5x an 82, scaled by how much his position earns).
+  function starValue(pos, ovr, cap) { return cap * TOP_SHARE[pos] * 0.9 * Math.pow(clamp((ovr - 62) / 35, 0, 1), 3); }
   function pickValue(pick, year, viewer) {
     var no = pick.no || (pick.round - 1) * 32 + 16;
     var v = 62000 * Math.exp(-0.0185 * (no - 1)) + 600;
@@ -830,7 +844,7 @@ var Market = (function () {
 
   return { TOP_SHARE: TOP_SHARE, POS_WEIGHT: POS_WEIGHT, STARTERS: STARTERS, PEAK: PEAK, projOvr: projOvr,
            valueAt: valueAt, demand: demand, evaluate: evaluate, noise: noise, playerTradeValue: playerTradeValue,
-           pickValue: pickValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, calibrateDrift: calibrateDrift, setDriftScale: setDriftScale, initialMarketShare: initialMarketShare };
+           pickValue: pickValue, starValue: starValue, talentCurve: talentCurve, faDiscount: faDiscount, setScale: setScale, getScale: function () { return scale; }, setCurve: setCurve, curveShare: curveShare, marketShare: marketShare, driftMarketValue: driftMarketValue, calibrateDrift: calibrateDrift, setDriftScale: setDriftScale, initialMarketShare: initialMarketShare };
 })();
 
 // League state, rosters, depth charts, transactions, AI front offices.
@@ -855,7 +869,7 @@ function newGame(data, userAbbr, seed) {
   });
   data.players.forEach(function (src) {
     var p = JSON.parse(JSON.stringify(src));
-    p.inj = 0; p.s = {}; p.car = {}; p.rej = 0;
+    p.inj = 0; p.s = {}; p.car = {}; p.rej = 0; p.peak = p.ovr; p.trait = p.trait || 'Normal';
     p.rights = p.team ? null : p.prevTeam;   // own team can re-sign expiring players in the re-sign window
     if (p.team && !TEAM[p.team]) p.team = null;
     S.players.push(p);
@@ -1044,7 +1058,7 @@ function extend(p, offer) {
   var yrs = buildExtensionYears(p, offer);
   var delta = Cap.capHit(p, S.year) - (Cap.row({ years: yrs }, S.year) || { cap: 0 }).cap;
   if (!validateCap(p.team, delta)) return { ok: false, msg: 'The new deal does not fit under this year\'s cap.' };
-  p.years = yrs; p.options = (p.options || []).filter(function (o) { return o.y < extensionStart(); });
+  p.years = yrs; p.options = [];   // pending option bonuses are replaced by the new deal
   p.apy = Cap.apy(yrs.filter(function (r) { return r.y >= extensionStart(); })); p.signed = S.year; p.rej = 0;
   p.gtdTotal = Math.max(offer.gtd || 0, offer.bonus || 0);
   news(TEAM[p.team].name + ' extended ' + p.pos + ' ' + p.name + ': ' + offer.years + ' yr, ' + fmtM(offer.total) + '.', p.team);
@@ -1073,17 +1087,26 @@ function assetValue(viewer, players, picks) {
   return sumBy(players, function (p) { return Market.playerTradeValue(p, S.year, marketCap(), v); }) +
          sumBy(picks, function (k) { return Market.pickValue(k, S.year, v); });
 }
+var CONSOLIDATION = [1, 0.6, 0.35];
+var REPLACEMENT_VALUE = 2000;     // what a replacement-level depth player is worth to a team ($K-equivalent)
 function aiTradeEval(ai, aiGets, aiGives) {
   var gp = aiGets.players.map(P), gk = aiGets.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
   var op = aiGives.players.map(P), ok_ = aiGives.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
-  var get = 0, give = 0;
+  var get = 0, give = 0, incoming = [];
+  // What the AI receives is valued as a package, not a sum: quality beats quantity.
   gp.forEach(function (p) {
     var v = assetValue(ai, [p], []);
+    if (v <= 0) { get += v; return; }                       // bad contracts hurt in full
     var lift = needAt(ai, p.pos, p.ovr);
-    v = v >= 0 ? v * (lift > 5 ? 1.2 : lift > 0 ? 1.0 : 0.75) : v;  // they want players who start for them
-    get += v;
+    if (p.ovr < 70 || lift <= 0) v *= 0.1;                  // wouldn't start for them, or below ~70: near zero
+    else if (lift > 5) v *= 1.15;                           // fills a real hole
+    incoming.push(v);
   });
-  gk.forEach(function (k) { get += assetValue(ai, [], [k]); });
+  gk.forEach(function (k) { incoming.push(assetValue(ai, [], [k])); });
+  // consolidation: best asset at full value, 2nd ~60%, 3rd ~35%, the rest ~10% (picks included)
+  incoming.sort(function (a, b) { return b - a; }).forEach(function (v, i) { get += v * (CONSOLIDATION[i] != null ? CONSOLIDATION[i] : 0.1); });
+  // each extra incoming player takes a roster spot from a replacement-level player
+  get -= Math.max(0, gp.length - op.length) * REPLACEMENT_VALUE;
   op.forEach(function (p) {
     var v = assetValue(ai, [p], []);
     var st = starters(ai, p.pos).some(function (s) { return s.id === p.id; });
@@ -1102,7 +1125,11 @@ function aiTradeEval(ai, aiGets, aiGives) {
   else if (rosAI > rosterMax() || rosU > rosterMax()) { feasible = false; msg = 'Roster limit (' + rosterMax() + ') exceeded.'; }
   else if (S.phase === 'season' && S.week > TRADE_DEADLINE_WEEK) { feasible = false; msg = 'The trade deadline has passed.'; }
   else if (!gp.length && !gk.length && !op.length && !ok_.length) feasible = false;
-  return { get: get, give: give, ratio: ratio, accept: feasible && get >= need, feasible: feasible, msg: msg,
+  // quality gate: a team only gives up a star (88+) for a comparable player or a first-round pick
+  var star = op.filter(function (p) { return p.ovr >= 88; }).sort(byKey(function (p) { return p.ovr; }, true))[0];
+  var gateOk = !star || gp.some(function (p) { return p.ovr >= star.ovr - 6; }) || gk.some(function (k) { return k.round === 1; });
+  if (feasible && !gateOk) { msg = TEAM[ai].abbr + ' wants a comparable player or a first-round pick for ' + star.name + '.'; }
+  return { get: get, give: give, ratio: gateOk ? ratio : Math.min(ratio, 0.8), accept: feasible && gateOk && get >= need, feasible: feasible, msg: msg, gate: gateOk,
            capAI: capAI, capUser: capU, short: Math.max(0, need - get) };
 }
 function executeTrade(ai, userGives, aiGives) {
@@ -1128,6 +1155,7 @@ function whatWouldItTake(ai, userGives, aiGives) {
   var cands = [];
   roster(S.user).forEach(function (p) {
     if (userGives.players.indexOf(p.id) >= 0) return;
+    if (p.ovr < 70 || needAt(ai, p.pos, p.ovr) <= 0) return;   // never suggest depth they wouldn't use
     var g = { players: userGives.players.concat([p.id]), picks: userGives.picks };
     var e = aiTradeEval(ai, g, aiGives);
     if (e.accept) cands.push({ kind: 'player', id: p.id, label: p.pos + ' ' + p.name + ' (' + p.ovr + ')', cost: assetValue(S.user, [p], []) });
@@ -1158,7 +1186,8 @@ function restructurePlayer(p, amount) {
 }
 
 // AI cap compliance: restructure big contracts first, then cut the worst value-for-money players.
-function aiCapFix(abbr, buffer) {
+// keepYoungStars: never cut an 80+ player under 30 (used when making room in the late market)
+function aiCapFix(abbr, buffer, keepYoungStars) {
   var guard = 0;
   while (space(abbr) < buffer && guard++ < 40) {
     var ros = roster(abbr);
@@ -1166,7 +1195,7 @@ function aiCapFix(abbr, buffer) {
                 .sort(byKey(function (p) { return Cap.restructureMax(p, S.year, p.exp); }, true))[0];
     if (rc) { restructurePlayer(rc, Cap.restructureMax(rc, S.year, rc.exp)); continue; }
     var cut = ros.map(function (p) { var pv = releasePreview(p, !isPostJune() && canJune1(abbr) && Cap.capHit(p, S.year) > 15000); return { p: p, pv: pv, s: pv.savings / 1000 - Math.max(0, p.ovr - 60) * 0.5 }; })
-                 .filter(function (x) { return x.pv.savings > 500; })
+                 .filter(function (x) { return x.pv.savings > 500 && !(keepYoungStars && x.p.ovr >= 80 && x.p.age < 30); })
                  // keep good young players unless there's no other way to get compliant
                  .sort(byKey(function (x) { return x.s - (x.p.ovr >= 80 && x.p.age < 30 ? 1000 : 0); }, true))[0];
     if (!cut) break;
@@ -1235,19 +1264,29 @@ function aiFreeAgencyDay() {
 function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
-    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
+    // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));
     var full = function (a) { return roster(a).length >= rosterMax(); };
     var teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
       .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
       .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
     if (!teams.length) {
       // nobody has the room: the team that needs him most makes room (restructures, then cuts lesser players)
+      // nobody has the room: the neediest teams (up to five) try to make room (restructures, then cuts)
       var needy = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
-        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
-      if (!needy) return;
-      aiCapFix(needy, floor + 4000 + Math.max(0, space(needy) - fullSpace(needy)));
-      if (lateRoom(needy) < floor) return;
-      teams = [{ a: needy, room: lateRoom(needy) }];
+        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true)).slice(0, 5);
+      for (var ni = 0; ni < needy.length && !teams.length; ni++) {
+        aiCapFix(needy[ni], floor + 4000 + Math.max(0, space(needy[ni]) - fullSpace(needy[ni])), true);
+        if (lateRoom(needy[ni]) >= floor) teams = [{ a: needy[ni], room: lateRoom(needy[ni]) }];
+      }
+      if (!teams.length && p.age < 30) {
+        // still nobody: a good young player takes whatever prove-it deal is on the table (12% of his ask)
+        var low = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.12));
+        teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
+          .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= low; })
+          .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
+      }
+      if (!teams.length) return;
     }
     var price = Math.min(ask, teams[0].room);
     if (full(teams[0].a)) cutdownOne(teams[0].a, p.pos);   // in season: release the weakest player elsewhere first
@@ -1381,7 +1420,7 @@ function makeFiller(pos) {
   var age = RNG.int(22, 24), ovr = RNG.int(44, 55);   // undrafted rookie depth
   var p = { id: 'G' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
             exp: 0, draft: [0, 0, 0], apy: 0, signed: S.year, gtdTotal: 0, years: [], options: [], status: 'FA',
-            ovr: ovr, pot: ovr + RNG.int(0, 3), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
+            ovr: ovr, pot: ovr + RNG.int(0, 3), trait: randomTrait(), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
   S.players.push(p); if (S._idx) S._idx[p.id] = p;
   return p;
 }
@@ -1752,10 +1791,11 @@ function genDraftClass(year) {
     var age = RNG.int(21, 23);
     var boost = (S.classBoost || {})[pos] || 0;               // class strength at this position
     var ovr = clamp(Math.round(54 + g * 7 + boost * 0.4 + RNG.normal() * 2), 40, 86);
-    var pot = clamp(Math.round(ovr + 8 + RNG.next() * 14 + Math.max(0, g) * 3 + boost * 0.8), ovr, 99);
+    var trait = randomTrait();
+    var pot = clamp(Math.round(ovr + (8 + RNG.next() * 14 + Math.max(0, g) * 3) * TRAITS[trait].upside + boost * 0.8), ovr, 99);
     var p = { id: 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
               exp: 0, draft: [year, 0, 0], apy: 0, signed: year, gtdTotal: 0, years: [], options: [], status: 'Prospect',
-              ovr: ovr, pot: pot, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
+              ovr: ovr, pot: pot, trait: trait, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
               college: RNG.pick(['Alabama', 'Georgia', 'Ohio State', 'Michigan', 'LSU', 'Texas', 'Oregon', 'USC', 'Clemson', 'Penn State', 'Florida', 'Notre Dame', 'Miami', 'Utah', 'Iowa', 'Wisconsin', 'Tennessee', 'Washington', 'Oklahoma', 'Auburn', 'Boise State', 'Toledo', 'App State', 'Tulane', 'Missouri', 'Kansas State']) };
     p.grade = prospectGrade(p);
     return p;
@@ -1859,16 +1899,30 @@ function performanceDeltas() {
   });
   return out;
 }
+// Development traits: how fast a player grows, how close he gets to his potential (stop short by `stop`),
+// how long he stays at his peak (`peak` extra years) and how fast he declines after it.
+var TRAITS = {
+  Slow:   { rate: 0.20, cap: 4, early: 0.12, earlyCap: 2, stop: 3, peak: -1, decline: 1.25, upside: 0.5 },
+  Normal: { rate: 0.33, cap: 6, early: 0.22, earlyCap: 4, stop: 1, peak: 0, decline: 1.0, upside: 1.0 },
+  Fast:   { rate: 0.42, cap: 7, early: 0.30, earlyCap: 5, stop: 0, peak: 1, decline: 0.85, upside: 1.4 },
+  Elite:  { rate: 0.50, cap: 8, early: 0.38, earlyCap: 6, stop: 0, peak: 2, decline: 0.7, upside: 1.8 },
+};
+function traitOf(p) { return TRAITS[p.trait] ? p.trait : 'Normal'; }
+function randomTrait() { var r = RNG.next(); return r < 0.15 ? 'Slow' : r < 0.75 ? 'Normal' : r < 0.95 ? 'Fast' : 'Elite'; }
+// Yearly rating change from aging + trait + this season's performance (no random drift).
+function progressDelta(p, perf) {
+  var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
+  var gap = Math.max(0, p.pot - t.stop - p.ovr);
+  if (p.age < pk[0]) return Math.min(t.cap, gap * t.rate) + perf * 0.6;                       // developing
+  if (p.age < pk[0] + 3 + Math.max(0, t.peak)) return Math.min(t.earlyCap, gap * t.early) + perf * 0.6;   // early prime
+  if (p.age <= pk[1] + t.peak) return perf * 0.6;                                              // prime
+  return -(1.5 + (p.age - (pk[1] + t.peak)) * 1.1) * t.decline + perf * 0.4;                  // decline
+}
 function progress(p, perf) {
-  var pk = Market.PEAK[p.pos] || [25, 30];
-  var d;
-  var gap = Math.max(0, p.pot - p.ovr);
-  if (p.age < pk[0]) d = Math.min(7, gap * 0.35) + perf * 0.6;                 // developing
-  else if (p.age < pk[0] + 3) d = Math.min(4, gap * 0.25) + perf * 0.6;       // early prime: still growing
-  else if (p.age <= pk[1]) d = perf * 0.6;
-  else d = -(1.5 + (p.age - pk[1]) * 1.1) + perf * 0.4;
-  p.ovr = clamp(Math.round(p.ovr + d), 30, 99);
-  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] + 3 ? perf * 0.4 : -2)));
+  var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
+  p.ovr = clamp(Math.round(p.ovr + progressDelta(p, perf)), 30, 99);
+  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] + 3 + Math.max(0, t.peak) ? perf * 0.4 : -2)));
+  p.peak = Math.max(p.peak || 0, p.ovr);
   p.age++; p.exp++;
 }
 
@@ -1966,7 +2020,7 @@ function updateClassStrength() {
   POSITIONS.forEach(function (pos) {
     var target = S.targetPipe[pos] || 0, cur = pipelineCount(pos);
     var gap = (target - cur) / Math.max(4, target);            // share of the starting 80+ group missing
-    S.classBoost[pos] = clamp(2 + gap * 15, -8, 20);   // small baseline lift + proportional to the projected shortfall
+    S.classBoost[pos] = clamp(gap * 15, -8, 20);   // proportional to the projected shortfall (traits supply growth)
   });
 }
 function seasonMvp() {
@@ -1990,6 +2044,20 @@ function flash(msg, bad) { UI.msg = { text: msg, bad: !!bad }; }
 // ---------- formatting ----------
 // Rating badge, colored by tier: 90+ gold, 80s green, 70s blue, 60s gray, under 60 dim.
 function ovrPill(o, big) { var t = o >= 90 ? 't90' : o >= 80 ? 't80' : o >= 70 ? 't70' : o >= 60 ? 't60' : 't50'; return '<span class="rt ' + t + (big ? ' big' : '') + '">' + o + '</span>'; }
+// Potential as a letter grade + range. Young players' ranges are wide and narrow with each season played;
+// the true value sits inside the range (offset by a fixed per-player amount, so the middle isn't a giveaway).
+// Veterans (27+ or 4+ seasons) show the exact number. The trait is "Unknown" until he has played a season.
+var POT_GRADES = [[95, 'A+'], [90, 'A'], [87, 'A-'], [84, 'B+'], [80, 'B'], [77, 'B-'], [74, 'C+'], [70, 'C'], [66, 'C-'], [0, 'D']];
+function potGrade(x) { for (var i = 0; i < POT_GRADES.length; i++) if (x >= POT_GRADES[i][0]) return POT_GRADES[i][1]; return 'D'; }
+function potInfo(p) {
+  var exp = p.prospect ? 0 : (p.exp || 0), known = !p.prospect && exp >= 1;
+  var u = p.age >= 27 || exp >= 4 ? 0 : [6, 4, 2, 1][Math.min(3, exp)];
+  var c = p.pot + (u ? Market.noise(p.id, 'pot') * u / 2 : 0);
+  var lo = Math.min(p.pot, Math.max(p.ovr, Math.round(c - u))), hi = Math.max(p.pot, Math.min(99, Math.round(c + u)));
+  return { known: known, trait: known ? (p.trait || 'Normal') : 'Unknown', grade: potGrade(u ? (lo + hi) / 2 : p.pot), lo: lo, hi: hi, exact: lo === hi };
+}
+function potText(p) { var i = potInfo(p); return '<span class="potg">' + i.grade + '</span> ' + (i.exact ? i.lo : i.lo + '–' + i.hi); }
+function devBadge(p) { var t = potInfo(p).trait; return '<span class="dev dev-' + t.toLowerCase() + '">' + t + '</span>'; }
 function capLabel() { return fmtM(capOf(S.year)) + ' cap (projected)'; }
 function teamLink(a) { return '<span class="tl">' + chip(a) + '<b>' + a + '</b></span>'; }
 function recStr(r) { return r.w + '-' + r.l + (r.t ? '-' + r.t : ''); }
@@ -2162,10 +2230,10 @@ VIEWS.roster = function () {
   if (UI.posFilter !== 'ALL') ros = ros.filter(function (p) { return p.pos === UI.posFilter; });
   var sorts = { ovr: function (p) { return -p.ovr; }, cap: function (p) { return -Cap.capHit(p, S.year); }, age: function (p) { return p.age; } };
   var h = '<div class="toolbar">' + filterBar('posFilter') + '<label class="sortsel">Sort <select data-act="roster-sort">' + [['pos', 'By position'], ['ovr', 'Rating'], ['cap', 'Cap hit'], ['age', 'Age']].map(function (o) { return '<option value="' + o[0] + '"' + (UI.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label></div>';
-  var head = '<tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">POT</th><th class="r">' + S.year + ' cap</th><th class="r">Left</th><th class="r hide-sm">Gtd left</th><th class="r hide-sm">Dead if cut</th></tr>';
+  var head = '<tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">Potential</th><th class="hide-sm">Dev</th><th class="r">' + S.year + ' cap</th><th class="r">Left</th><th class="r hide-sm">Gtd left</th><th class="r hide-sm">Dead if cut</th></tr>';
   var row = function (p, starter) {
     var pv = releasePreview(p, false);
-    return '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span>' + (starter ? '<span class="st">S</span>' : '') + statusStr(p) + '<span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted hide-sm">' + p.pot + '</td>' +
+    return '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span>' + (starter ? '<span class="st">S</span>' : '') + statusStr(p) + '<span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="hide-sm">' + potText(p) + '</td><td class="hide-sm">' + devBadge(p) + '</td>' +
       '<td class="r">' + fmtM(Cap.capHit(p, S.year)) + '</td><td class="r">' + yrsLeftStr(p) + '</td><td class="r hide-sm">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td><td class="r hide-sm">' + fmtM(pv.now) + '</td></tr>';
   };
   h += '<div class="tablewrap"><table class="roster"><thead>' + head + '</thead><tbody>';
@@ -2177,7 +2245,7 @@ VIEWS.roster = function () {
       var order = (depth[pos] || []).filter(function (id) { return grp.some(function (p) { return p.id === id; }); });
       grp.sort(byKey(function (p) { var i = order.indexOf(p.id); return i < 0 ? 999 - p.ovr : i; }));
       var st = starters(S.user, pos).map(function (p) { return p.id; });
-      h += '<tr class="grp"><td colspan="9">' + pos + ' <span>' + grp.length + ' · ' + Market.STARTERS[pos] + ' start</span></td></tr>';
+      h += '<tr class="grp"><td colspan="10">' + pos + ' <span>' + grp.length + ' · ' + Market.STARTERS[pos] + ' start</span></td></tr>';
       grp.forEach(function (p) { h += row(p, st.indexOf(p.id) >= 0); });
     });
   } else {
@@ -2238,7 +2306,8 @@ function playerModal(id) {
     var h = '<div class="pc-band" style="' + teamVars(p.team || p.rights || S.user) + '">' + ovrPill(p.ovr, true) + '<div class="pc-id"><h2>' + esc(p.name) + '</h2><div>' + p.pos + (p.opos && p.opos !== p.pos ? ' (' + p.opos + ')' : '') + ' · age ' + p.age + ' · ' + who +
       (p.draft && p.draft[1] ? ' · drafted ' + p.draft[0] + ' R' + p.draft[1] + ' #' + p.draft[2] : '') + '</div></div><button class="x" data-act="close" aria-label="Close">✕</button></div>';
     var SUB = { pass: 'Passing', acc: 'Accuracy', run: 'Rushing', prod: 'Production', tgt: 'Targets', rec: 'Receiving', rush: 'Pass rush', tkl: 'Tackling', play: 'Playmaking', cov: 'Coverage', pow: 'Leg', net: 'Net punting' };
-    var tiles = [['Potential', ovrPill(p.pot)]].concat(Object.keys(p.sub || {}).slice(0, 2).map(function (k) { return [SUB[k] || k, ovrPill(p.sub[k])]; }));
+    var pi = potInfo(p);
+    var tiles = [['Potential', '<b>' + pi.grade + '</b><small class="muted">' + (pi.exact ? pi.lo : pi.lo + '–' + pi.hi) + '</small>'], ['Dev trait', devBadge(p)]].concat(Object.keys(p.sub || {}).slice(0, 2).map(function (k) { return [SUB[k] || k, ovrPill(p.sub[k])]; }));
     if (p.years && p.years.length) tiles.push(['This year', '<b>' + fmtM(Cap.capHit(p, Y)) + '</b>'], ['Years left', '<b>' + (Cap.yearsLeft(p, Y) || '—') + '</b>'], ['Gtd left', '<b>' + fmtM(Cap.gtdLeft(p, Y)) + '</b>']);
     else tiles.push(['Market value', '<b>' + fmtM(Market.demand(p, marketCap(), Y).apy) + '/yr</b>']);
     h += '<div class="pc-tiles">' + tiles.map(function (t) { return '<div class="tile"><span>' + t[0] + '</span>' + t[1] + '</div>'; }).join('') + '</div>';
@@ -2370,10 +2439,10 @@ VIEWS.fa = function () {
 };
 function faTable(list, resign) {
   if (!list.length) return '<p class="muted">Nobody here.</p>';
-  var h = '<div class="tablewrap"><table><thead><tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">POT</th><th class="hide-sm">Last team</th><th class="r">Asking/yr</th><th class="r hide-sm">Yrs</th><th class="r hide-sm">Gtd</th><th class="hide-sm"></th></tr></thead><tbody>';
+  var h = '<div class="tablewrap"><table><thead><tr><th>Player</th><th class="hide-sm">Pos</th><th class="r">Age</th><th>OVR</th><th class="hide-sm">Potential</th><th class="hide-sm">Last team</th><th class="r">Asking/yr</th><th class="r hide-sm">Yrs</th><th class="r hide-sm">Gtd</th><th class="hide-sm"></th></tr></thead><tbody>';
   list.forEach(function (p) {
     var d = Market.demand(p, marketCap(), S.year), disc = S.phase === 'resign' ? 1 : 1 - Market.faDiscount(offerCtx(p, S.user).daysIntoFA);
-    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span><span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="muted hide-sm">' + p.pot + '</td><td class="hide-sm">' + (p.prevTeam || p.cutBy || '—') + '</td>' +
+    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td><span class="pname">' + esc(p.name) + '</span><span class="pos-sm">' + p.pos + '</span></td><td class="hide-sm">' + p.pos + '</td><td class="r">' + p.age + '</td><td>' + ovrPill(p.ovr) + '</td><td class="hide-sm">' + potText(p) + '</td><td class="hide-sm">' + (p.prevTeam || p.cutBy || '—') + '</td>' +
       '<td class="r">' + fmtM(d.apy * disc) + '</td><td class="r hide-sm">' + d.years + '</td><td class="r hide-sm">' + fmtM(d.gtd * disc) + '</td><td class="hide-sm"><button data-act="offer" data-id="' + p.id + '" data-mode="sign">' + (resign ? 'Re-sign' : 'Offer') + '</button></td></tr>';
   });
   return h + '</tbody></table></div><p class="muted small">Tap a player for his card and to make an offer.</p>';
@@ -2434,9 +2503,9 @@ VIEWS.draft = function () {
   if (S.year === BASE.startYear && BASE.draftOrder) h += '<p class="muted small">Draft order: real ' + (S.year - 1) + ' results' + (BASE.draftOrderFinal ? ' (final).' : ' as of ' + BASE.draftOrderGames + ' of 272 games, provisional until the data is refreshed after the season.') + ' Traded and compensatory picks aren\'t included.</p>';
   h += '<div class="actions">' + (onClock ? '<span class="pill g">You are on the clock</span>' : '<button class="primary" data-act="draft-sim">Sim to my next pick</button>') + '<button data-act="draft-auto">Auto-draft the rest</button></div></section>';
   h += '<section class="card"><h3>Recent picks</h3><ul class="news">' + S.draft.made.slice(-8).reverse().map(function (m) { var p = P(m.id); return '<li>#' + m.no + ' ' + teamLink(m.team) + ' ' + (p ? p.pos + ' ' + esc(p.name) : '') + '</li>'; }).join('') + '</ul></section></div>';
-  h += filterBar('draftPos') + '<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Prospect</th><th>Pos</th><th>Age</th><th>College</th><th>OVR</th><th>POT</th><th></th></tr></thead><tbody>';
+  h += filterBar('draftPos') + '<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Prospect</th><th>Pos</th><th class="hide-sm">Age</th><th class="hide-sm">College</th><th>OVR</th><th>Potential</th><th class="hide-sm">Dev</th><th></th></tr></thead><tbody>';
   pool.slice(0, 80).forEach(function (p, i) {
-    h += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + p.pos + '</td><td>' + p.age + '</td><td class="muted">' + esc(p.college) + '</td><td>' + ovrPill(p.ovr) + '</td><td>' + p.pot + '</td><td>' + (onClock ? '<button class="primary" data-act="draft-pick" data-id="' + p.id + '">Draft</button>' : '') + '</td></tr>';
+    h += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.name) + '</td><td>' + p.pos + '</td><td class="hide-sm">' + p.age + '</td><td class="muted hide-sm">' + esc(p.college) + '</td><td>' + ovrPill(p.ovr) + '</td><td>' + potText(p) + '</td><td class="hide-sm">' + devBadge(p) + '</td><td>' + (onClock ? '<button class="primary" data-act="draft-pick" data-id="' + p.id + '">Draft</button>' : '') + '</td></tr>';
   });
   return h + '</tbody></table></div>';
 };

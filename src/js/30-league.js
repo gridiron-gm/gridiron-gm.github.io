@@ -20,7 +20,7 @@ function newGame(data, userAbbr, seed) {
   });
   data.players.forEach(function (src) {
     var p = JSON.parse(JSON.stringify(src));
-    p.inj = 0; p.s = {}; p.car = {}; p.rej = 0;
+    p.inj = 0; p.s = {}; p.car = {}; p.rej = 0; p.peak = p.ovr; p.trait = p.trait || 'Normal';
     p.rights = p.team ? null : p.prevTeam;   // own team can re-sign expiring players in the re-sign window
     if (p.team && !TEAM[p.team]) p.team = null;
     S.players.push(p);
@@ -209,7 +209,7 @@ function extend(p, offer) {
   var yrs = buildExtensionYears(p, offer);
   var delta = Cap.capHit(p, S.year) - (Cap.row({ years: yrs }, S.year) || { cap: 0 }).cap;
   if (!validateCap(p.team, delta)) return { ok: false, msg: 'The new deal does not fit under this year\'s cap.' };
-  p.years = yrs; p.options = (p.options || []).filter(function (o) { return o.y < extensionStart(); });
+  p.years = yrs; p.options = [];   // pending option bonuses are replaced by the new deal
   p.apy = Cap.apy(yrs.filter(function (r) { return r.y >= extensionStart(); })); p.signed = S.year; p.rej = 0;
   p.gtdTotal = Math.max(offer.gtd || 0, offer.bonus || 0);
   news(TEAM[p.team].name + ' extended ' + p.pos + ' ' + p.name + ': ' + offer.years + ' yr, ' + fmtM(offer.total) + '.', p.team);
@@ -238,17 +238,26 @@ function assetValue(viewer, players, picks) {
   return sumBy(players, function (p) { return Market.playerTradeValue(p, S.year, marketCap(), v); }) +
          sumBy(picks, function (k) { return Market.pickValue(k, S.year, v); });
 }
+var CONSOLIDATION = [1, 0.6, 0.35];
+var REPLACEMENT_VALUE = 2000;     // what a replacement-level depth player is worth to a team ($K-equivalent)
 function aiTradeEval(ai, aiGets, aiGives) {
   var gp = aiGets.players.map(P), gk = aiGets.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
   var op = aiGives.players.map(P), ok_ = aiGives.picks.map(function (id) { return S.picks.filter(function (k) { return k.id === id; })[0]; });
-  var get = 0, give = 0;
+  var get = 0, give = 0, incoming = [];
+  // What the AI receives is valued as a package, not a sum: quality beats quantity.
   gp.forEach(function (p) {
     var v = assetValue(ai, [p], []);
+    if (v <= 0) { get += v; return; }                       // bad contracts hurt in full
     var lift = needAt(ai, p.pos, p.ovr);
-    v = v >= 0 ? v * (lift > 5 ? 1.2 : lift > 0 ? 1.0 : 0.75) : v;  // they want players who start for them
-    get += v;
+    if (p.ovr < 70 || lift <= 0) v *= 0.1;                  // wouldn't start for them, or below ~70: near zero
+    else if (lift > 5) v *= 1.15;                           // fills a real hole
+    incoming.push(v);
   });
-  gk.forEach(function (k) { get += assetValue(ai, [], [k]); });
+  gk.forEach(function (k) { incoming.push(assetValue(ai, [], [k])); });
+  // consolidation: best asset at full value, 2nd ~60%, 3rd ~35%, the rest ~10% (picks included)
+  incoming.sort(function (a, b) { return b - a; }).forEach(function (v, i) { get += v * (CONSOLIDATION[i] != null ? CONSOLIDATION[i] : 0.1); });
+  // each extra incoming player takes a roster spot from a replacement-level player
+  get -= Math.max(0, gp.length - op.length) * REPLACEMENT_VALUE;
   op.forEach(function (p) {
     var v = assetValue(ai, [p], []);
     var st = starters(ai, p.pos).some(function (s) { return s.id === p.id; });
@@ -267,7 +276,11 @@ function aiTradeEval(ai, aiGets, aiGives) {
   else if (rosAI > rosterMax() || rosU > rosterMax()) { feasible = false; msg = 'Roster limit (' + rosterMax() + ') exceeded.'; }
   else if (S.phase === 'season' && S.week > TRADE_DEADLINE_WEEK) { feasible = false; msg = 'The trade deadline has passed.'; }
   else if (!gp.length && !gk.length && !op.length && !ok_.length) feasible = false;
-  return { get: get, give: give, ratio: ratio, accept: feasible && get >= need, feasible: feasible, msg: msg,
+  // quality gate: a team only gives up a star (88+) for a comparable player or a first-round pick
+  var star = op.filter(function (p) { return p.ovr >= 88; }).sort(byKey(function (p) { return p.ovr; }, true))[0];
+  var gateOk = !star || gp.some(function (p) { return p.ovr >= star.ovr - 6; }) || gk.some(function (k) { return k.round === 1; });
+  if (feasible && !gateOk) { msg = TEAM[ai].abbr + ' wants a comparable player or a first-round pick for ' + star.name + '.'; }
+  return { get: get, give: give, ratio: gateOk ? ratio : Math.min(ratio, 0.8), accept: feasible && gateOk && get >= need, feasible: feasible, msg: msg, gate: gateOk,
            capAI: capAI, capUser: capU, short: Math.max(0, need - get) };
 }
 function executeTrade(ai, userGives, aiGives) {
@@ -293,6 +306,7 @@ function whatWouldItTake(ai, userGives, aiGives) {
   var cands = [];
   roster(S.user).forEach(function (p) {
     if (userGives.players.indexOf(p.id) >= 0) return;
+    if (p.ovr < 70 || needAt(ai, p.pos, p.ovr) <= 0) return;   // never suggest depth they wouldn't use
     var g = { players: userGives.players.concat([p.id]), picks: userGives.picks };
     var e = aiTradeEval(ai, g, aiGives);
     if (e.accept) cands.push({ kind: 'player', id: p.id, label: p.pos + ' ' + p.name + ' (' + p.ovr + ')', cost: assetValue(S.user, [p], []) });
@@ -323,7 +337,8 @@ function restructurePlayer(p, amount) {
 }
 
 // AI cap compliance: restructure big contracts first, then cut the worst value-for-money players.
-function aiCapFix(abbr, buffer) {
+// keepYoungStars: never cut an 80+ player under 30 (used when making room in the late market)
+function aiCapFix(abbr, buffer, keepYoungStars) {
   var guard = 0;
   while (space(abbr) < buffer && guard++ < 40) {
     var ros = roster(abbr);
@@ -331,7 +346,7 @@ function aiCapFix(abbr, buffer) {
                 .sort(byKey(function (p) { return Cap.restructureMax(p, S.year, p.exp); }, true))[0];
     if (rc) { restructurePlayer(rc, Cap.restructureMax(rc, S.year, rc.exp)); continue; }
     var cut = ros.map(function (p) { var pv = releasePreview(p, !isPostJune() && canJune1(abbr) && Cap.capHit(p, S.year) > 15000); return { p: p, pv: pv, s: pv.savings / 1000 - Math.max(0, p.ovr - 60) * 0.5 }; })
-                 .filter(function (x) { return x.pv.savings > 500; })
+                 .filter(function (x) { return x.pv.savings > 500 && !(keepYoungStars && x.p.ovr >= 80 && x.p.age < 30); })
                  // keep good young players unless there's no other way to get compliant
                  .sort(byKey(function (x) { return x.s - (x.p.ovr >= 80 && x.p.age < 30 ? 1000 : 0); }, true))[0];
     if (!cut) break;
@@ -400,19 +415,29 @@ function aiFreeAgencyDay() {
 function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
-    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.35));
+    // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)
+    var ask = Market.demand(p, marketCap(), S.year).apy, floor = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * (p.age < 30 ? 0.25 : 0.35)));
     var full = function (a) { return roster(a).length >= rosterMax(); };
     var teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
       .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= floor; })
       .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
     if (!teams.length) {
       // nobody has the room: the team that needs him most makes room (restructures, then cuts lesser players)
+      // nobody has the room: the neediest teams (up to five) try to make room (restructures, then cuts)
       var needy = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
-        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true))[0];
-      if (!needy) return;
-      aiCapFix(needy, floor + 4000 + Math.max(0, space(needy) - fullSpace(needy)));
-      if (lateRoom(needy) < floor) return;
-      teams = [{ a: needy, room: lateRoom(needy) }];
+        .sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 1000 + space(a) / 1000; }, true)).slice(0, 5);
+      for (var ni = 0; ni < needy.length && !teams.length; ni++) {
+        aiCapFix(needy[ni], floor + 4000 + Math.max(0, space(needy[ni]) - fullSpace(needy[ni])), true);
+        if (lateRoom(needy[ni]) >= floor) teams = [{ a: needy[ni], room: lateRoom(needy[ni]) }];
+      }
+      if (!teams.length && p.age < 30) {
+        // still nobody: a good young player takes whatever prove-it deal is on the table (12% of his ask)
+        var low = Math.max(Cap.minSalary(p.exp, S.year), Math.round(ask * 0.12));
+        teams = aiTeams().filter(function (a) { return a !== S.user && (!full(a) || S.phase === 'season'); })
+          .map(function (a) { return { a: a, room: lateRoom(a) }; }).filter(function (t) { return t.room >= low; })
+          .sort(byKey(function (t) { return t.room + (needAt(t.a, p.pos, p.ovr) > 0 ? 20000 : 0); }, true));
+      }
+      if (!teams.length) return;
     }
     var price = Math.min(ask, teams[0].room);
     if (full(teams[0].a)) cutdownOne(teams[0].a, p.pos);   // in season: release the weakest player elsewhere first
@@ -546,7 +571,7 @@ function makeFiller(pos) {
   var age = RNG.int(22, 24), ovr = RNG.int(44, 55);   // undrafted rookie depth
   var p = { id: 'G' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
             exp: 0, draft: [0, 0, 0], apy: 0, signed: S.year, gtdTotal: 0, years: [], options: [], status: 'FA',
-            ovr: ovr, pot: ovr + RNG.int(0, 3), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
+            ovr: ovr, pot: ovr + RNG.int(0, 3), trait: randomTrait(), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
   S.players.push(p); if (S._idx) S._idx[p.id] = p;
   return p;
 }

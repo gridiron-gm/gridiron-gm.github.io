@@ -84,10 +84,11 @@ function genDraftClass(year) {
     var age = RNG.int(21, 23);
     var boost = (S.classBoost || {})[pos] || 0;               // class strength at this position
     var ovr = clamp(Math.round(54 + g * 7 + boost * 0.4 + RNG.normal() * 2), 40, 86);
-    var pot = clamp(Math.round(ovr + 8 + RNG.next() * 14 + Math.max(0, g) * 3 + boost * 0.8), ovr, 99);
+    var trait = randomTrait();
+    var pot = clamp(Math.round(ovr + (8 + RNG.next() * 14 + Math.max(0, g) * 3) * TRAITS[trait].upside + boost * 0.8), ovr, 99);
     var p = { id: 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
               exp: 0, draft: [year, 0, 0], apy: 0, signed: year, gtdTotal: 0, years: [], options: [], status: 'Prospect',
-              ovr: ovr, pot: pot, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
+              ovr: ovr, pot: pot, trait: trait, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
               college: RNG.pick(['Alabama', 'Georgia', 'Ohio State', 'Michigan', 'LSU', 'Texas', 'Oregon', 'USC', 'Clemson', 'Penn State', 'Florida', 'Notre Dame', 'Miami', 'Utah', 'Iowa', 'Wisconsin', 'Tennessee', 'Washington', 'Oklahoma', 'Auburn', 'Boise State', 'Toledo', 'App State', 'Tulane', 'Missouri', 'Kansas State']) };
     p.grade = prospectGrade(p);
     return p;
@@ -191,16 +192,30 @@ function performanceDeltas() {
   });
   return out;
 }
+// Development traits: how fast a player grows, how close he gets to his potential (stop short by `stop`),
+// how long he stays at his peak (`peak` extra years) and how fast he declines after it.
+var TRAITS = {
+  Slow:   { rate: 0.20, cap: 4, early: 0.12, earlyCap: 2, stop: 3, peak: -1, decline: 1.25, upside: 0.5 },
+  Normal: { rate: 0.33, cap: 6, early: 0.22, earlyCap: 4, stop: 1, peak: 0, decline: 1.0, upside: 1.0 },
+  Fast:   { rate: 0.42, cap: 7, early: 0.30, earlyCap: 5, stop: 0, peak: 1, decline: 0.85, upside: 1.4 },
+  Elite:  { rate: 0.50, cap: 8, early: 0.38, earlyCap: 6, stop: 0, peak: 2, decline: 0.7, upside: 1.8 },
+};
+function traitOf(p) { return TRAITS[p.trait] ? p.trait : 'Normal'; }
+function randomTrait() { var r = RNG.next(); return r < 0.15 ? 'Slow' : r < 0.75 ? 'Normal' : r < 0.95 ? 'Fast' : 'Elite'; }
+// Yearly rating change from aging + trait + this season's performance (no random drift).
+function progressDelta(p, perf) {
+  var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
+  var gap = Math.max(0, p.pot - t.stop - p.ovr);
+  if (p.age < pk[0]) return Math.min(t.cap, gap * t.rate) + perf * 0.6;                       // developing
+  if (p.age < pk[0] + 3 + Math.max(0, t.peak)) return Math.min(t.earlyCap, gap * t.early) + perf * 0.6;   // early prime
+  if (p.age <= pk[1] + t.peak) return perf * 0.6;                                              // prime
+  return -(1.5 + (p.age - (pk[1] + t.peak)) * 1.1) * t.decline + perf * 0.4;                  // decline
+}
 function progress(p, perf) {
-  var pk = Market.PEAK[p.pos] || [25, 30];
-  var d;
-  var gap = Math.max(0, p.pot - p.ovr);
-  if (p.age < pk[0]) d = Math.min(7, gap * 0.35) + perf * 0.6;                 // developing
-  else if (p.age < pk[0] + 3) d = Math.min(4, gap * 0.25) + perf * 0.6;       // early prime: still growing
-  else if (p.age <= pk[1]) d = perf * 0.6;
-  else d = -(1.5 + (p.age - pk[1]) * 1.1) + perf * 0.4;
-  p.ovr = clamp(Math.round(p.ovr + d), 30, 99);
-  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] + 3 ? perf * 0.4 : -2)));
+  var pk = Market.PEAK[p.pos] || [25, 30], t = TRAITS[traitOf(p)];
+  p.ovr = clamp(Math.round(p.ovr + progressDelta(p, perf)), 30, 99);
+  p.pot = Math.max(p.ovr, Math.round(p.pot + (p.age < pk[0] + 3 + Math.max(0, t.peak) ? perf * 0.4 : -2)));
+  p.peak = Math.max(p.peak || 0, p.ovr);
   p.age++; p.exp++;
 }
 
@@ -298,7 +313,7 @@ function updateClassStrength() {
   POSITIONS.forEach(function (pos) {
     var target = S.targetPipe[pos] || 0, cur = pipelineCount(pos);
     var gap = (target - cur) / Math.max(4, target);            // share of the starting 80+ group missing
-    S.classBoost[pos] = clamp(2 + gap * 15, -8, 20);   // small baseline lift + proportional to the projected shortfall
+    S.classBoost[pos] = clamp(gap * 15, -8, 20);   // proportional to the projected shortfall (traits supply growth)
   });
 }
 function seasonMvp() {

@@ -24,6 +24,8 @@ for (let s = 0; s < seasons; s++) {
       if (S.phase === 'season' && S.week === 1) {
         if (freeAgents().some(function(p){return p.ovr>=80 && p.age<30})) log.push('CHECK unsigned young 80+');
         if (TEAMS.some(function(t){return t.abbr !== S.user && space(t.abbr) < 0})) log.push('CHECK AI team over cap');
+        var n80 = S.players.filter(function(p){return !p.retired && !p.prospect && p.ovr>=80}).length, t80 = sumBy(POSITIONS,function(q){return S.target80[q]});
+        if (n80 < 0.7 * t80 || n80 > 1.3 * t80) log.push('CHECK talent ' + n80 + ' vs ' + t80);
         var avgSp = sumBy(TEAMS.filter(function(t){return t.abbr !== S.user}), function(t){return space(t.abbr)}) / 31;
         if (avgSp < 5000 || avgSp > 30000) log.push('CHECK avg space ' + fmtM(avgSp));
         log.push('rosters ' + TEAMS.map(function(t){return roster(t.abbr).length}).join(','));
@@ -48,7 +50,22 @@ for (let s = 0; s < seasons; s++) {
   check('champion crowned', !!out.h.champ);
   check('no unsigned 80+ players under 30 at week 1', !out.log.some(l => l === 'CHECK unsigned young 80+'));
   check('every AI team under the cap at week 1', !out.log.some(l => l === 'CHECK AI team over cap'));
+  check('80+ talent count within 30% of the starting count', !out.log.some(l => /^CHECK talent/.test(l)), (out.log.find(l => /^CHECK talent/.test(l)) || ''));
   check('average week-one cap space $5-30M per team', !out.log.some(l => /^CHECK avg space/.test(l)), (out.log.find(l => /^CHECK avg space/.test(l)) || ''));
 }
+// development traits: young players (24 or under at the start, or drafted during the run) reach 90+
+// far more often with an Elite trait than a Normal one
+const dev = vm.runInContext(`(function(){
+  var out = {};
+  S.players.forEach(function (p) {
+    var young = p.draft && p.draft[0] >= BASE.startYear - 2;
+    if (!young) return;
+    var t = p.trait || 'Normal'; out[t] = out[t] || { n: 0, hit: 0 };
+    out[t].n++; if ((p.peak || p.ovr) >= 90) out[t].hit++;
+  });
+  return out; })()`, ctx);
+const rate = t => dev[t] && dev[t].n ? dev[t].hit / dev[t].n : 0;
+console.log('  reached 90+ (young players): ' + ['Slow', 'Normal', 'Fast', 'Elite'].map(t => t + ' ' + (dev[t] ? dev[t].hit + '/' + dev[t].n + ' = ' + Math.round(rate(t) * 100) + '%' : '-')).join(', '));
+if (seasons >= 8) check('Elite players reach 90+ much more often than Normal ones (at least 3x)', rate('Elite') >= 3 * rate('Normal') && rate('Elite') > 0.1);
 console.log(`${seasons} seasons in ${Date.now() - t0} ms; ${fail} failures`);
 process.exit(fail ? 1 : 0);

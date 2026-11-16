@@ -402,8 +402,30 @@ for pos, lst in by_pos.items():
         if o > 80 and top > 80: o = 80 + (o - 80) * (T - 80) / (top - 80)
         elif top <= 80: o = min(o, T)
         p['ovr'] = int(math.floor(max(40, min(T, o)) + 1e-9))
-        up = max(0, 27 - p['age']) * 2.2                      # potential: youth upside
-        p['pot'] = min(99, max(p['ovr'], round(p['ovr'] + up)))
+
+# ---------- development trait (Slow / Normal / Fast / Elite) ----------
+# From the data: improvement 2024 -> 2026 relative to what's normal for his age, draft slot (young players)
+# and early Pro Bowls. League split: top 5% Elite, next 20% Fast, bottom 15% Slow, the rest Normal.
+def expected_trend(age):   # typical yearly change in production z by age
+    return 0.25 if age <= 24 else 0.1 if age <= 27 else 0.0 if age <= 29 else -0.2
+for p in players:
+    zs = {yr: v[2] for yr, v in p['_seasons'].items() if v[2] is not None and v[1] >= 4}
+    ys = sorted(zs)
+    trend = (zs[ys[-1]] - zs[ys[0]]) / (ys[-1] - ys[0]) if len(ys) >= 2 else 0.0
+    rel = max(-1.5, min(1.5, trend - expected_trend(p['age'] - 1))) if len(ys) >= 2 else 0.0
+    pick = p['draft'][2] or 0
+    draft = (1 - math.log(pick) / math.log(260)) if pick else 0.0
+    young = p['age'] <= 26
+    p['_dev'] = 0.8 * rel + draft * (0.7 if young else 0.25) + (0.9 if young and pb_now.get(p['id'], 0) > 0 else 0) + (max(0, p['ovr'] - 80) / 15 if young else 0)
+ranked = sorted(players, key=lambda p: -p['_dev'])
+n = len(ranked)
+for i, p in enumerate(ranked):
+    q = i / n
+    p['trait'] = 'Elite' if q < 0.05 else 'Fast' if q < 0.25 else 'Slow' if q >= 0.85 else 'Normal'
+TRAIT_UPSIDE = {'Slow': 0.5, 'Normal': 1.0, 'Fast': 1.4, 'Elite': 1.8}
+for p in players:
+    up = max(0, 27 - p['age']) * 2.2 * TRAIT_UPSIDE[p['trait']]   # potential: youth upside, scaled by trait
+    p['pot'] = min(99, max(p['ovr'], round(p['ovr'] + up)))
 
 # ---------- market value (separate from the on-field rating) ----------
 # How the real NFL values each player, using only information from before the 2026 free-agency period:
@@ -573,7 +595,7 @@ for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
 OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 for p in players:
     p['line26'] = statline(p['id'], p['pos'])
-    for k_ in ('_f', '_score', '_fp', '_prod', '_prodPct', '_seasons', '_prior_raw', '_games', '_z', '_rel', '_ovr'): p.pop(k_, None)
+    for k_ in ('_f', '_score', '_fp', '_prod', '_prodPct', '_seasons', '_prior_raw', '_games', '_z', '_rel', '_ovr', '_dev'): p.pop(k_, None)
     p['pb'] = pro_bowls.get(p['id'], 0)
     if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
         side = 'off' if p['pos'] in OFF_POS else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'

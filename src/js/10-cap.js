@@ -161,10 +161,12 @@ var Cap = (function () {
   function buildExtension(p, offer, startYear) {
     var newYears = buildContract(offer, startYear, p.exp);
     var old = remaining(p, startYear);
+    // Real (already paid) proration stays in its years. Pending, unexercised option bonuses of the old deal
+    // are replaced by the new contract, so their cap charges are dropped rather than stacked on top.
     old.forEach(function (o) {
       var r = newYears.filter(function (x) { return x.y === o.y; })[0];
-      if (r) { r.pro += o.pro; r.opt = opt(o); recalc(r); }
-      else newYears.push(recalc({ y: o.y, base: 0, pro: o.pro, opt: opt(o), roster: 0, other: 0, gtd: 0, void: true })); // old proration beyond new term
+      if (r) { r.pro += o.pro; recalc(r); }
+      else if (o.pro > 0) newYears.push(recalc({ y: o.y, base: 0, pro: o.pro, opt: 0, roster: 0, other: 0, gtd: 0, void: true })); // old proration beyond new term
     });
     newYears.sort(function (a, b) { return a.y - b.y; });
     return newYears;

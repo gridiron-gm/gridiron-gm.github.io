@@ -117,6 +117,11 @@ console.log('Extension on a real contract (Christian Gonzalez)');
   eq('old proration kept + new bonus', extPro, oldPro + 45000);
   ok('extension runs 5 years', ext.length === 5 && ext[0].y === Y);
   ok('every row cap = parts', ext.every(r => r.cap === r.base + r.pro + (r.opt||0) + r.roster + r.other));
+  // an extension replaces pending option bonuses instead of stacking their cap charges on top (Josh Allen)
+  const al = JSON.parse(JSON.stringify(byId[otc['Josh Allen'].gsis]));
+  const alExt = Cap.buildExtension(al, { years: 4, total: 240000, bonus: 60000, gtd: 120000 }, Y);
+  ok('extension drops pending option charges', alExt.every(r => !(r.opt > 0)));
+  eq('extension keeps already-paid proration', alExt.reduce((s, r) => s + r.pro, 0), Cap.remaining(al, Y).reduce((s, r) => s + r.pro, 0) + 60000);
 }
 
 // ---------- 4. Team cap, dead money, rollover ----------

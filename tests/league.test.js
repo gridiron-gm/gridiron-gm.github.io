@@ -44,25 +44,20 @@ ok('AI teams are cap compliant with every contract counted', run('TEAMS.every(fu
 
 // ---------- your players' ratings: aging and performance only ----------
 run('while (S.phase === "season") advance(); while (!S.playoffs.champ) advance();');
-const before = run('(function(){ var o = {}; roster("NE").forEach(function(p){ o[p.id] = { ovr: p.ovr, age: p.age, pos: p.pos, pot: p.pot }; }); return o; })()');
+const before = run('(function(){ var o = {}; roster("NE").forEach(function(p){ o[p.id] = { ovr: p.ovr, age: p.age, pos: p.pos, pot: p.pot, trait: p.trait }; }); return o; })()');
 const perf = run('performanceDeltas()');
 run('endOfYear();');
 let checked = 0, bad = 0;
 for (const [id, b] of Object.entries(before)) {
   const p = run(`(function(){ var p = P("${id}"); return p && !p.retired ? { ovr: p.ovr } : null; })()`);
   if (!p) continue;
-  const pk = run(`Market.PEAK["${b.pos}"]`), pf = perf[id] || 0;
-  let d;
-  const gap = Math.max(0, b.pot - b.ovr);
-  if (b.age < pk[0]) d = Math.min(7, gap * 0.35) + pf * 0.6;
-  else if (b.age < pk[0] + 3) d = Math.min(4, gap * 0.25) + pf * 0.6;
-  else if (b.age <= pk[1]) d = pf * 0.6;
-  else d = -(1.5 + (b.age - pk[1]) * 1.1) + pf * 0.4;
+  const pf = perf[id] || 0;
+  const d = run(`progressDelta({ pos: "${b.pos}", age: ${b.age}, ovr: ${b.ovr}, pot: ${b.pot}, trait: "${b.trait}" }, ${pf})`);
   const want = Math.max(30, Math.min(99, Math.round(b.ovr + d)));
   checked++; if (p.ovr !== want) bad++;
 }
-ok(`all ${checked} of your players moved exactly by age + performance`, checked > 30 && bad === 0);
-const flat = run('(function(){ var p = { pos: "WR", age: 28, ovr: 80, pot: 82, exp: 6 }; progress(p, 0); return p.ovr; })()');
+ok(`all ${checked} of your players moved exactly by age + trait + performance`, checked > 30 && bad === 0);
+const flat = run('(function(){ var p = { pos: "WR", age: 29, ovr: 80, pot: 82, exp: 6, trait: "Normal" }; progress(p, 0); return p.ovr; })()');
 ok('prime-age player with average performance stays put', flat === 80);
 const old = run('(function(){ var p = { pos: "RB", age: 30, ovr: 85, pot: 85, exp: 8 }; progress(p, 0); return p.ovr; })()');
 ok('30-year-old RB declines with age', old < 85);
