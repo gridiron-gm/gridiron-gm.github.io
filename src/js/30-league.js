@@ -419,7 +419,7 @@ function aiFreeAgencyDay() {
 // Late market (preseason): good players still unsigned take one-year "prove-it" deals for whatever room
 // a team has, as long as it reaches about a third of their ask. Teams with the most room go first.
 // room that will still be there at week 1, when every contract counts (not just the top 51)
-function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4000; }
+function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4500; }   // AI keeps a $4.5M in-season buffer
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)

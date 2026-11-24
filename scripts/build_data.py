@@ -561,31 +561,122 @@ top1696 = sorted(players, key=lambda p: -p['ovr'])[:53 * 32]
 fill = sum(FLOOR + CL * TOP_SHARE[p['pos']] * max(0.0, (p['ovr'] - CA) / (99 - CA)) ** CB for p in top1696) / 32
 print('curve pay for the best 53x32 players = %.0f%% of the cap per team' % (fill * 100))
 
-# position-specific sub-ratings (0-99) from the same features, for display and sim flavor
-SUBS = {'QB': [('pass', 'epa'), ('acc', 'cpoe')], 'RB': [('run', 'ypc'), ('prod', 'scrim')],
-        'WR': [('prod', 'yds'), ('tgt', 'ts')], 'TE': [('rec', 'yds'), ('tgt', 'ts')],
-        'DL': [('rush', 'pr')], 'EDGE': [('rush', 'pr')], 'LB': [('tkl', 'tk'), ('play', 'play')],
-        'CB': [('cov', 'ball')], 'S': [('cov', 'ball'), ('tkl', 'tk')], 'K': [('acc', 'acc'), ('pow', 'long')],
-        'P': [('net', 'net')], 'OT': [('play', 'snap')], 'IOL': [('play', 'snap')], 'LS': []}
-for pos, lst in by_pos.items():
-    for lab, f in SUBS[pos]:
-        vals = sorted(p['_f'].get(f, 0) for p in lst)
-        for p in lst:
-            pct = (sum(1 for v in vals if v < p['_f'].get(f, 0)) + 0.5) / len(vals)
-            p.setdefault('sub', {})[lab] = round(40 + 59 * pct)
+# ---------- position-specific sub-ratings (display only: OVR does not use them) ----------
+# Each is a recency-weighted rate from real stats (2024 .15 / 2025 .35 / 2026 .50, same as OVR), turned into a
+# percentile within the position, then blended with OVR so backups with tiny samples don't look elite.
+pfrdef = defaultdict(dict)
+for (g, yr), rows in _cov_rows.items():
+    r = next((x for x in rows if x['tm'].endswith('TM')), rows[0])
+    pfrdef[g][yr] = {k_: fnum(r[k_]) for k_ in ('g', 'tgt', 'cmp', 'yds', 'prss', 'comb', 'm_tkl', 'int')}
 
-# last-season stat lines for the player card
-def statline(g, pos):
-    s = stats[2026].get(g) or {}
-    if not s: return None
+def _n(s, *keys): return sum(fnum(s.get(k_)) for k_ in keys)
+def _gp(s): return fnum(s.get('games'))
+def _sn(g, yr, side):
+    x = snaps[yr].get(g); return (x[side] / x['g_' + side], 1) if x and x['g_' + side] else (0, 0)
+def _avail(g, yr, side):
+    x = snaps[yr].get(g); return ((x['g_' + side] if x else 0), games_in[yr])
+def _pd(key_num, key_den, sign=1):
+    return lambda g, yr, s, d: ((sign * sum(d[k_] for k_ in key_num) if d else 0), (sum(d[k_] for k_ in key_den) if d else 0))
+SURE = _pd(('m_tkl',), ('comb', 'm_tkl'), -1)
+COVY = _pd(('yds',), ('tgt',), -1)
+COVC = _pd(('cmp',), ('tgt',), -1)
+BLITZ = lambda g, yr, s, d: ((d['prss'] if d else 0), (d['g'] if d else 0))
+SUPPORT = lambda g, yr, s, d: (_n(s, 'def_tackles_solo'), _gp(s))
+BALL = lambda g, yr, s, d: (_n(s, 'def_pass_defended') + 2.5 * _n(s, 'def_interceptions'), _gp(s))
+SUBS = {   # key, label, per-season (numerator, denominator), minimum total denominator
+ 'QB': [('arm', 'Arm', lambda g, yr, s, d: (_n(s, 'passing_air_yards'), _n(s, 'attempts')), 120),
+        ('acc', 'Accuracy', lambda g, yr, s, d: (fnum(s.get('passing_cpoe')) * _n(s, 'attempts'), _n(s, 'attempts')), 120),
+        ('dec', 'Decisions', lambda g, yr, s, d: (-_n(s, 'passing_interceptions'), _n(s, 'attempts')), 120),
+        ('pkt', 'Pocket', lambda g, yr, s, d: (-_n(s, 'sacks_suffered'), _n(s, 'attempts', 'sacks_suffered')), 120),
+        ('mob', 'Mobility', lambda g, yr, s, d: (_n(s, 'rushing_yards'), _gp(s)), 4),
+        ('eff', 'Efficiency', lambda g, yr, s, d: (_n(s, 'passing_epa', 'rushing_epa'), _n(s, 'attempts', 'sacks_suffered', 'carries')), 120)],
+ 'RB': [('rush', 'Rushing', lambda g, yr, s, d: (_n(s, 'rushing_yards'), _n(s, 'carries')), 40),
+        ('brk', 'Breakaway', lambda g, yr, s, d: (_n(s, 'rushing_20'), _n(s, 'carries')), 40),
+        ('rec', 'Receiving', lambda g, yr, s, d: (_n(s, 'receiving_yards'), _gp(s)), 4),
+        ('sec', 'Ball security', lambda g, yr, s, d: (-_n(s, 'rushing_fumbles_lost', 'receiving_fumbles_lost'), _n(s, 'carries', 'receptions')), 50),
+        ('load', 'Workload', lambda g, yr, s, d: (_n(s, 'carries', 'receptions'), _gp(s)), 4)],
+ 'WR': [('hands', 'Hands', lambda g, yr, s, d: (_n(s, 'receptions'), _n(s, 'targets')), 20),
+        ('deep', 'Deep threat', lambda g, yr, s, d: (_n(s, 'receiving_air_yards'), _n(s, 'targets')), 20),
+        ('yac', 'After catch', lambda g, yr, s, d: (_n(s, 'receiving_yards_after_catch'), _n(s, 'receptions')), 12),
+        ('prod', 'Production', lambda g, yr, s, d: (_n(s, 'receiving_yards'), _gp(s)), 4),
+        ('use', 'Usage', lambda g, yr, s, d: (fnum(s.get('target_share')) * _gp(s), _gp(s)), 4)],
+ 'TE': [('hands', 'Hands', lambda g, yr, s, d: (_n(s, 'receptions'), _n(s, 'targets')), 15),
+        ('yac', 'After catch', lambda g, yr, s, d: (_n(s, 'receiving_yards_after_catch'), _n(s, 'receptions')), 10),
+        ('prod', 'Production', lambda g, yr, s, d: (_n(s, 'receiving_yards'), _gp(s)), 4),
+        ('use', 'Usage', lambda g, yr, s, d: (fnum(s.get('target_share')) * _gp(s), _gp(s)), 4),
+        ('role', 'Snap share', lambda g, yr, s, d: _sn(g, yr, 'off'), 1)],
+ 'OT': [('avail', 'Availability', lambda g, yr, s, d: _avail(g, yr, 'off'), 8),
+        ('role', 'Snap share', lambda g, yr, s, d: _sn(g, yr, 'off'), 1),
+        ('disc', 'Discipline', lambda g, yr, s, d: (-_n(s, 'penalties'), _avail(g, yr, 'off')[0]), 8),
+        ('exp', 'Experience', None, 0)],
+ 'EDGE': [('rush', 'Pass rush', lambda g, yr, s, d: (2 * _n(s, 'def_sacks') + _n(s, 'def_qb_hits'), _gp(s)), 4),
+          ('prs', 'Pressure', BLITZ, 4),
+          ('run', 'Run stop', lambda g, yr, s, d: (_n(s, 'def_tackles_for_loss'), _gp(s)), 4),
+          ('sure', 'Sure tackling', SURE, 15),
+          ('role', 'Snap share', lambda g, yr, s, d: _sn(g, yr, 'def'), 1)],
+ 'LB': [('tkl', 'Tackling', lambda g, yr, s, d: (_n(s, 'def_tackles_solo') + 0.5 * _n(s, 'def_tackle_assists'), _gp(s)), 4),
+        ('sure', 'Sure tackling', SURE, 20),
+        ('cov', 'Coverage', COVY, 12),
+        ('blitz', 'Blitz', BLITZ, 4),
+        ('play', 'Playmaking', lambda g, yr, s, d: (_n(s, 'def_tackles_for_loss', 'def_pass_defended') + 2 * _n(s, 'def_interceptions', 'def_fumbles_forced'), _gp(s)), 4)],
+ 'CB': [('cov', 'Coverage', COVY, 20), ('tight', 'Tight coverage', COVC, 20), ('ball', 'Ball skills', BALL, 4),
+        ('sure', 'Sure tackling', SURE, 15), ('sup', 'Run support', SUPPORT, 4)],
+ 'S': [('cov', 'Coverage', COVY, 12), ('ball', 'Ball skills', BALL, 4), ('sure', 'Sure tackling', SURE, 15),
+       ('sup', 'Run support', SUPPORT, 4), ('blitz', 'Blitz', BLITZ, 4)],
+ 'K': [('acc', 'Accuracy', lambda g, yr, s, d: (_n(s, 'fg_made'), _n(s, 'fg_att')), 8),
+       ('leg', 'Leg', lambda g, yr, s, d: (_n(s, 'fg_made_50_59') + 2 * _n(s, 'fg_made_60_'), _gp(s)), 4),
+       ('rng', 'Range', lambda g, yr, s, d: (_n(s, 'fg_long') * _gp(s), _gp(s)), 4),
+       ('pat', 'Extra points', lambda g, yr, s, d: (_n(s, 'pat_made'), _n(s, 'pat_att')), 10)],
+ 'P': [('net', 'Net', lambda g, yr, s, d: (_n(s, 'pt_net_yards'), _n(s, 'pt_att')), 15),
+       ('pow', 'Power', lambda g, yr, s, d: (_n(s, 'pt_yards'), _n(s, 'pt_att')), 15),
+       ('place', 'Placement', lambda g, yr, s, d: (_n(s, 'pt_inside_20'), _n(s, 'pt_att')), 15),
+       ('ctrl', 'Control', lambda g, yr, s, d: (-_n(s, 'pt_touchback'), _n(s, 'pt_att')), 15)],
+ 'LS': [('avail', 'Availability', lambda g, yr, s, d: _avail(g, yr, 'st'), 8), ('exp', 'Experience', None, 0)],
+}
+SUBS['IOL'] = SUBS['OT']; SUBS['DL'] = SUBS['EDGE']
+SUB_LABELS = {pos: [[k_, lab] for k_, lab, _, _ in lst] for pos, lst in SUBS.items()}
+SUB_MISSING = 45   # percentile score used when a player has too small a sample
+for pos, lst in by_pos.items():
+    for key, lab, fn, mind in SUBS[pos]:
+        raw = {}
+        for p in lst:
+            if fn is None: raw[p['id']] = p['exp']; continue
+            num = den = 0.0
+            for yr, w in RATE_YEARS.items():
+                s = stats[yr].get(p['id'], {}); d = pfrdef.get(p['id'], {}).get(yr)
+                n_, d_ = fn(p['id'], yr, s, d)
+                num += w * n_; den += w * d_
+            tot = sum(fn(p['id'], yr, stats[yr].get(p['id'], {}), pfrdef.get(p['id'], {}).get(yr))[1] for yr in RATE_YEARS)
+            if tot >= mind and den > 0: raw[p['id']] = num / den
+        vals = sorted(raw.values())
+        for p in lst:
+            v = raw.get(p['id'])
+            score = SUB_MISSING if v is None else 40 + 59 * sum(1 for x in vals if x <= v) / len(vals)   # ties share the top of their range
+            p.setdefault('sub', {})[key] = max(25, min(99, round(0.35 * p['ovr'] + 0.65 * score)))
+
+# stat lines for the player card: 2024, 2025 and 2026 (to date)
+def statline(g, pos, yr):
+    s = stats[yr].get(g) or {}
     gp = int(fnum(s.get('games')))
-    if pos == 'QB': return f"{gp} G · {int(fnum(s['passing_yards']))} yds · {int(fnum(s['passing_tds']))} TD · {int(fnum(s['passing_interceptions']))} INT"
-    if pos == 'RB': return f"{gp} G · {int(fnum(s['rushing_yards']))} rush yds · {int(fnum(s['rushing_tds']))} TD"
-    if pos in ('WR', 'TE'): return f"{gp} G · {int(fnum(s['receptions']))} rec · {int(fnum(s['receiving_yards']))} yds · {int(fnum(s['receiving_tds']))} TD"
-    if pos in ('DL', 'EDGE', 'LB'): return f"{gp} G · {fnum(s['def_sacks']):g} sacks · {int(fnum(s['def_tackles_solo']))} solo tkl"
-    if pos in ('CB', 'S'): return f"{gp} G · {int(fnum(s['def_interceptions']))} INT · {int(fnum(s['def_pass_defended']))} PD"
-    if pos == 'K': return f"{gp} G · {int(fnum(s['fg_made']))}/{int(fnum(s['fg_att']))} FG"
+    if not gp: return None
+    i = lambda k_: int(fnum(s.get(k_)))
+    if pos == 'QB':
+        att = i('attempts'); cp = f" · {100 * i('completions') / att:.1f}%" if att else ''
+        return f"{gp} G · {i('passing_yards')} yds · {i('passing_tds')} TD · {i('passing_interceptions')} INT{cp} · {i('rushing_yards')} rush yds"
+    if pos == 'RB': return f"{gp} G · {i('carries')} car · {i('rushing_yards')} rush yds · {i('rushing_tds')} TD · {i('receptions')} rec · {i('receiving_yards')} rec yds"
+    if pos in ('WR', 'TE'): return f"{gp} G · {i('receptions')} rec · {i('targets')} tgt · {i('receiving_yards')} yds · {i('receiving_tds')} TD"
+    if pos in ('DL', 'EDGE', 'LB'): return f"{gp} G · {fnum(s.get('def_sacks')):g} sacks · {i('def_qb_hits')} QB hits · {i('def_tackles_for_loss')} TFL · {i('def_tackles_solo')} solo tkl"
+    if pos in ('CB', 'S'): return f"{gp} G · {i('def_interceptions')} INT · {i('def_pass_defended')} PD · {i('def_tackles_solo')} solo tkl"
+    if pos == 'K': return f"{gp} G · {i('fg_made')}/{i('fg_att')} FG · long {i('fg_long')} · {i('pat_made')}/{i('pat_att')} XP"
+    if pos == 'P':
+        pa = i('pt_att'); return f"{gp} G · {pa} punts" + (f" · {fnum(s.get('pt_net_yards')) / pa:.1f} net · {i('pt_inside_20')} inside 20" if pa else '')
     return f"{gp} G"
+def statlines(g, pos):
+    out = []
+    for yr in (2024, 2025, 2026):
+        t = statline(g, pos, yr)
+        if t: out.append([yr, (stats[yr].get(g) or {}).get('recent_team') or '', t])
+    return out
 
 # Pro Bowls (Pro Football Reference counts via nflverse draft_picks) and playing time for recent
 # first-round picks: both drive the fifth-year option amount.
@@ -594,7 +685,7 @@ for r in csv.DictReader(open(os.path.join(RAW, 'draft_picks.csv'))):
     if r['gsis_id'] and r['probowls'].isdigit(): pro_bowls[r['gsis_id']] = int(r['probowls'])
 OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 for p in players:
-    p['line26'] = statline(p['id'], p['pos'])
+    p['lines'] = statlines(p['id'], p['pos'])
     for k_ in ('_f', '_score', '_fp', '_prod', '_prodPct', '_seasons', '_prior_raw', '_games', '_z', '_rel', '_ovr', '_dev'): p.pop(k_, None)
     p['pb'] = pro_bowls.get(p['id'], 0)
     if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
@@ -671,7 +762,7 @@ if os.path.exists(ov_path):
         print(f"override: {p['name']} {r['field']} {old} -> {p[r['field']]}")
 
 players.sort(key=lambda p: (p['team'] or 'ZZZ', -p['ovr']))
-out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'curve': {'a': CA, 'b': CB, 'L': round(CL, 4), 'floor': FLOOR}, 'capProjected': True, 'optTable': opt_table, 'optGroup': OPT_GROUP,
+out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'curve': {'a': CA, 'b': CB, 'L': round(CL, 4), 'floor': FLOOR}, 'capProjected': True, 'subLabels': SUB_LABELS, 'optTable': opt_table, 'optGroup': OPT_GROUP,
                 'draftOrder': d_order, 'draftOrderFinal': d_final, 'draftOrderGames': d_games, 'rosterFile': ROSTER_FILE,
                 'source': 'nflverse (contracts: OverTheCap), built ' + __import__('datetime').date.today().isoformat()},
        'players': players}

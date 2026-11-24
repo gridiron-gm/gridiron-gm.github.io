@@ -12,7 +12,7 @@ const strip = h => String(h).replace(/<[^>]+>/g, '');
 function scenario(label, overAsk) {
   const ctx = { console, Math, Date, JSON }; vm.createContext(ctx);
   for (const f of fs.readdirSync(path.join(__dirname, '../src/js')).sort())
-    if (/^(00|10|20|30|40|50|60)-/.test(f)) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', f), 'utf8').replace(/^if \(typeof module.*$/m, ''), ctx, { filename: f });
+    if (/^(00|10|20|30|40|50|55|60)-/.test(f)) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', f), 'utf8').replace(/^if \(typeof module.*$/m, ''), ctx, { filename: f });
   ctx.DATA = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data.json'), 'utf8'));
   const run = c => vm.runInContext(c, ctx);
   console.log(label);

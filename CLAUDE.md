@@ -1,11 +1,11 @@
-# NFL GM
+# Gridiron GM
 
-Browser franchise sim with real NFL rosters and contracts. Static site on GitHub Pages from `docs/`.
+Browser franchise sim with real NFL rosters and contracts. Static site on GitHub Pages from `docs/` (repo gridiron-gm/gridiron-gm.github.io, live at https://gridiron-gm.github.io).
 
 ## Layout
 - `./refresh.sh` is the one command to refresh real data: downloads nflverse files (`scripts/fetch_data.sh`), rebuilds `src/data.json`, refreshes the OverTheCap reference numbers, runs the tests, builds `docs/`.
-- `scripts/build_data.py` (run with `.venv/bin/python -I`) builds `src/data.json`: contracts (OverTheCap via nflverse) split into base / prorated / pending option / roster+other / guarantees / void years, plus ratings derived from 2025-26 stats, snaps, age, and a draft-slot or contract-size prior. Money is integer $K.
-- `src/js/10-cap.js` cap and contract rules (pure, tested). `20-market.js` asking prices, offer evaluation, trade values. `30-league.js` state, transactions, AI front offices. `40-season.js` schedule, sim, playoffs. `50-offseason.js` phases, draft, progression, rollover, market feedback. `60-ui.js` screens. `70-main.js` boot.
+- `scripts/build_data.py` (run with `.venv/bin/python -I`) builds `src/data.json`: contracts (OverTheCap via nflverse) split into base / prorated / pending option / roster+other / guarantees / void years, plus ratings derived from 2024-26 stats, snaps, age, and a draft-slot or contract-size prior. Money is integer $K.
+- `src/js/10-cap.js` cap and contract rules (pure, tested). `20-market.js` asking prices, offer evaluation, trade values. `30-league.js` state, transactions, AI front offices. `40-season.js` schedule, sim, playoffs. `50-offseason.js` phases, draft, progression, rollover, market feedback. `55-phases.js` which screens each part of the year shows (tested in `tests/phases.test.js`). `60-ui.js` screens. `70-main.js` boot.
 - `build.sh` inlines CSS/JS into `docs/index.html` and copies `docs/data.json`.
 
 ## Rules for changes

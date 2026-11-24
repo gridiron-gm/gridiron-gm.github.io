@@ -75,7 +75,12 @@ function cutdownOne(abbr, avoidPos) {
 
 // ---------- draft ----------
 var CLASS_POS = { QB: 12, RB: 22, WR: 40, TE: 18, OT: 26, IOL: 28, EDGE: 34, DL: 30, LB: 26, CB: 36, S: 22, K: 3, P: 3, LS: 2 };
-function genDraftClass(year) {
+// Each class has its own random stream (seed + year), so the prospects board can preview it before the
+// draft without touching the league's main random sequence. Ratings use the class strength at the time.
+function classSeed(year) { return ((S.seed | 0) ^ Math.imul(year | 0, 0x9E3779B1)) || 1; }
+function genDraftClass(year, preview) {
+  var saved = RNG.s; RNG.s = classSeed(year);
+  var n = 0;
   var list = [];
   Object.keys(CLASS_POS).forEach(function (pos) { for (var i = 0; i < CLASS_POS[pos]; i++) list.push(pos); });
   var out = list.map(function (pos) {
@@ -86,7 +91,7 @@ function genDraftClass(year) {
     var ovr = clamp(Math.round(54 + g * 7 + boost * 0.4 + RNG.normal() * 2), 40, 86);
     var trait = randomTrait();
     var pot = clamp(Math.round(ovr + (8 + RNG.next() * 14 + Math.max(0, g) * 3) * TRAITS[trait].upside + boost * 0.8), ovr, 99);
-    var p = { id: 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
+    var p = { id: preview ? 'X' + year + '-' + (n++) : 'D' + year + '-' + (S.nextId++), name: fakeName(), pos: pos, opos: pos, age: age, team: null, prevTeam: null,
               exp: 0, draft: [year, 0, 0], apy: 0, signed: year, gtdTotal: 0, years: [], options: [], status: 'Prospect',
               ovr: ovr, pot: pot, trait: trait, sub: {}, inj: 0, s: {}, car: {}, rej: 0, prospect: true, gen: true,
               college: RNG.pick(['Alabama', 'Georgia', 'Ohio State', 'Michigan', 'LSU', 'Texas', 'Oregon', 'USC', 'Clemson', 'Penn State', 'Florida', 'Notre Dame', 'Miami', 'Utah', 'Iowa', 'Wisconsin', 'Tennessee', 'Washington', 'Oklahoma', 'Auburn', 'Boise State', 'Toledo', 'App State', 'Tulane', 'Missouri', 'Kansas State']) };
@@ -94,6 +99,7 @@ function genDraftClass(year) {
     return p;
   });
   out.sort(byKey(function (p) { return p.grade; }, true));
+  RNG.s = saved;
   return out;
 }
 function prospectGrade(p) { return (p.ovr * 0.55 + p.pot * 0.45) * (0.9 + Market.POS_WEIGHT[p.pos] * 0.05); }
@@ -213,7 +219,7 @@ function progressDelta(p, perf) {
 }
 // Late bloomers: each offseason a good young player (26 or under, rated 78+) whose trait didn't promise
 // much may break out: a one-season jump in rating and a higher ceiling. Fast/Elite players already grow.
-var BREAKOUT = { Slow: 0.03, Normal: 0.12, Fast: 0, Elite: 0 };   // the players nobody expected
+var BREAKOUT = { Slow: 0.03, Normal: 0.20, Fast: 0, Elite: 0 };   // the players nobody expected
 function breakout(p) {
   if (p.age > 26 || p.prospect || p.ovr < 78 || RNG.next() >= BREAKOUT[traitOf(p)]) return;
   p.ovr = Math.min(99, p.ovr + RNG.int(4, 9));

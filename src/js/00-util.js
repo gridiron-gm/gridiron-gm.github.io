@@ -42,10 +42,17 @@ function mixHex(hex, to, t) {
 function teamVars(abbr) {
   var c = TEAM_COLORS[abbr] || ['#2a3442', '#7aa2d6'], c1 = c[0], c2 = c[1];
   var acc = hexLum(c2) >= 0.1 ? c2 : hexLum(c1) >= 0.1 ? c1 : mixHex(c1, '#ffffff', 0.45);
-  var band = hexLum(c1) < 0.02 ? mixHex(c1, '#1b2431', 0.35) : c1;   // keep near-black bands from vanishing
+  // the full-bleed background: lift near-black primaries, deepen bright ones (gold, orange) so white text reads on it
+  var band = hexLum(c1) < 0.02 ? mixHex(c1, '#1b2431', 0.35) : hexLum(c1) > 0.2 ? mixHex(c1, '#0a0f18', 0.5) : c1;
   // links/text in the accent: lighten it so it reads as a link, not as a red warning
   var accText = mixHex(acc, '#ffffff', hexLum(acc) < 0.3 ? 0.45 : 0.15);
-  return '--tc1:' + band + ';--tc2:' + c2 + ';--acc:' + acc + ';--acc-text:' + accText + ';--on-tc1:' + (hexLum(band) > 0.4 ? '#101418' : '#ffffff') + ';--on-acc:' + (hexLum(acc) > 0.4 ? '#101418' : '#ffffff');
+  // tc2: the secondary as a fill (near-black or white secondaries fall back to the readable accent);
+  // tc2b: a brightened version for thin accent lines and small labels on the dark UI
+  var fill2 = hexLum(c2) < 0.02 || hexLum(c2) > 0.85 ? acc : c2;
+  var bright2 = hexLum(fill2) < 0.25 ? mixHex(fill2, '#ffffff', 0.35) : fill2;
+  var deep2 = hexLum(fill2) > 0.18 ? mixHex(fill2, '#000000', 0.42) : fill2;   // big fills behind white text
+  return '--tc1:' + band + ';--tc2:' + fill2 + ';--tc2b:' + bright2 + ';--tc2d:' + deep2 + ';--acc:' + acc + ';--acc-text:' + accText + ';--on-tc1:' + (hexLum(band) > 0.4 ? '#101418' : '#ffffff') +
+    ';--on-tc2:' + (hexLum(fill2) > 0.4 ? '#101418' : '#ffffff') + ';--on-acc:' + (hexLum(acc) > 0.4 ? '#101418' : '#ffffff');
 }
 
 var POSITIONS = ['QB', 'RB', 'WR', 'TE', 'OT', 'IOL', 'EDGE', 'DL', 'LB', 'CB', 'S', 'K', 'P', 'LS'];

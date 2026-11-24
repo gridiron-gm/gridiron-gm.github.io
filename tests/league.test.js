@@ -51,19 +51,22 @@ ok('AI teams are cap compliant with every contract counted', run('TEAMS.every(fu
 
 // ---------- your players' ratings: aging and performance only ----------
 run('while (S.phase === "season") advance(); while (!S.playoffs.champ) advance();');
-const before = run('(function(){ var o = {}; roster("NE").forEach(function(p){ o[p.id] = { ovr: p.ovr, age: p.age, pos: p.pos, pot: p.pot, trait: p.trait }; }); return o; })()');
+const before = run('(function(){ var o = {}; roster("NE").forEach(function(p){ o[p.id] = { ovr: p.ovr, age: p.age, pos: p.pos, pot: p.pot, trait: p.trait, bo: p.brokeOut || 0 }; }); return o; })()');
 const perf = run('performanceDeltas()');
 run('endOfYear();');
-let checked = 0, bad = 0;
+let checked = 0, bad = 0, broke = [];
 for (const [id, b] of Object.entries(before)) {
-  const p = run(`(function(){ var p = P("${id}"); return p && !p.retired ? { ovr: p.ovr } : null; })()`);
+  const p = run(`(function(){ var p = P("${id}"); return p && !p.retired ? { ovr: p.ovr, bo: p.brokeOut || 0 } : null; })()`);
   if (!p) continue;
+  // a late-bloomer breakout (Normal/Slow, 26 or younger, 78+) jumps 4-9 before normal progression
+  if (p.bo > b.bo) { broke.push(b); continue; }
   const pf = perf[id] || 0;
   const d = run(`progressDelta({ pos: "${b.pos}", age: ${b.age}, ovr: ${b.ovr}, pot: ${b.pot}, trait: "${b.trait}" }, ${pf})`);
   const want = Math.max(30, Math.min(99, Math.round(b.ovr + d)));
   checked++; if (p.ovr !== want) bad++;
 }
-ok(`all ${checked} of your players moved exactly by age + trait + performance`, checked > 30 && bad === 0);
+ok(`all ${checked} of your players moved exactly by age + trait + performance (${broke.length} late-bloomer breakouts checked separately)`, checked > 30 && bad === 0);
+ok('breakouts only for Normal/Slow players 26 or younger rated 78+', broke.every(b => b.age <= 26 && b.ovr >= 78 && (b.trait === 'Normal' || b.trait === 'Slow')), JSON.stringify(broke));
 const flat = run('(function(){ var p = { pos: "WR", age: 29, ovr: 80, pot: 82, exp: 6, trait: "Normal" }; progress(p, 0); return p.ovr; })()');
 ok('prime-age player with average performance stays put', flat === 80);
 const old = run('(function(){ var p = { pos: "RB", age: 30, ovr: 85, pot: 85, exp: 8 }; progress(p, 0); return p.ovr; })()');
