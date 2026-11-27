@@ -4,3 +4,4 @@ data/raw/
 # raw downloads and anything large stay local; the site only needs docs/
 *.parquet
 *.csv.gz
+.test-logs/

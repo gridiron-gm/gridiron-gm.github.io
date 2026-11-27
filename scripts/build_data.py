@@ -18,6 +18,10 @@ RAW = os.path.join(ROOT, 'data', 'raw')
 START_YEAR = 2027          # first league year of the franchise
 CAP_2027 = None            # $K, projected: implied by OverTheCap cap_percent figures (computed below)
 REF_DATE = (2027, 3, 11)   # league year start, for ages
+SEASON = START_YEAR - 1    # the real season a new game starts in (2026)
+# GG_MODE=w1: the 'Start of 2026, week 1' file: week-1 rosters and ratings from 2024-25 stats only (nothing
+# from 2026 leaks in). Written to src/data_w1.json. The default build is the current-week file (src/data.json).
+W1 = os.environ.get('GG_MODE') == 'w1'
 
 NAME_TO_ABBR = {
  '49ers':'SF','Bears':'CHI','Bengals':'CIN','Bills':'BUF','Broncos':'DEN','Browns':'CLE','Buccaneers':'TB',
@@ -70,19 +74,21 @@ pfr_to_gsis = {r['pfr_id']: g for g, r in players_xw.items() if r['pfr_id']}
 
 # ---------- contracts ----------
 contracts = {}
+all_contracts = defaultdict(list)
 for r in pq.read_table(os.path.join(RAW, 'historical_contracts.parquet')).to_pylist():
+    if r['gsis_id']: all_contracts[r['gsis_id']].append(r)
     if not r['is_active'] or not r['gsis_id']: continue
     prev = contracts.get(r['gsis_id'])
     if prev is None or (r['year_signed'] or 0) >= (prev['year_signed'] or 0):
         contracts[r['gsis_id']] = r
 
-def contract_years(c):
-    """Future league years (>= START_YEAR) of a contract.
+def contract_years(c, start=START_YEAR):
+    """Future league years (>= start) of a contract.
 
     Returns (years, options).
     - Option bonuses: OverTheCap's option_bonus column is the sum of overlapping 5-year prorations. We
-      split it back into individual options. Options exercised before START_YEAR are real proration (go in
-      `pro`, accelerate as dead money). Options from START_YEAR on are pending: their proration is charged
+      split it back into individual options. Options exercised before start are real proration (go in
+      `pro`, accelerate as dead money). Options from start on are pending: their proration is charged
       to the cap in `opt` but is not dead money until exercised (Cap.exerciseOptions does that).
     - Void years (cap charge but no real salary) are kept with void=True so leftover proration accelerates
       when the deal voids.
@@ -105,15 +111,15 @@ def contract_years(c):
             options.append({'y': y, 'per': new, 'span': span})
     out = []
     for y in yrs:
-        if y < START_YEAR: continue
+        if y < start: continue
         s = hist[y]
         cap = k(s['cap_number'])
         if cap <= 0: continue
         base, pro, rost = k(s['base_salary']), k(s['prorated_bonus']), k(s['roster_bonus'])
-        o_exer = sum(op['per'] for op in options if op['y'] < START_YEAR and op['y'] <= y < op['y'] + op['span'])
+        o_exer = sum(op['per'] for op in options if op['y'] < start and op['y'] <= y < op['y'] + op['span'])
         o_pend = k(s['option_bonus']) - o_exer
         cash = k(s['cash_paid'])
-        void = cap < base + rost or (cash == 0 and base > 0 and y >= START_YEAR)   # no cash paid = void year
+        void = cap < base + rost or (cash == 0 and base > 0 and y >= start and y > SEASON)   # no cash paid = void year (not the season in progress)
         if void:
             base = rost = 0
         other = cap - base - pro - rost - o_exer - o_pend   # workout, per-game, other bonuses
@@ -135,12 +141,12 @@ def contract_years(c):
         out.append(row)
     out.sort(key=lambda s: s['y'])
     run = []
-    for s in out:   # contiguous run from START_YEAR
-        if s['y'] == START_YEAR + len(run): run.append(s)
+    for s in out:   # contiguous run from start
+        if s['y'] == start + len(run): run.append(s)
         else: break
     while run and run[0].get('void'): run.pop(0)
     if not run or all(r.get('void') for r in run): return [], []
-    pend = [{'y': op['y'], 'per': op['per'], 'span': op['span']} for op in options if op['y'] >= START_YEAR]
+    pend = [{'y': op['y'], 'per': op['per'], 'span': op['span']} for op in options if op['y'] >= start]
     return run, pend
 
 # ---------- stats + snaps ----------
@@ -175,9 +181,10 @@ def per_game(st_, key):
     gp = fnum(st_.get('games')) or 1
     return fnum(st_.get(key)) / gp
 
-def features(g, pos, yrs=((2025, 0.45), (2026, 0.55))):
+def features(g, pos, yrs=None):
     """Weighted blend of production features. On-field rating: 2025 (.45) + 2026-to-date (.55).
     Market value uses only seasons before the 2026 free-agency period: 2024 (.4) + 2025 (.6)."""
+    if yrs is None: yrs = ((2024, 0.45), (2025, 0.55)) if W1 else ((2025, 0.45), (2026, 0.55))
     feats = {}
     tot_w = 0
     for yr, w in yrs:
@@ -229,6 +236,18 @@ WEIGHTS = {  # feature weights per position; snap share is how much the real coa
  'K': {'acc': 1.0, 'long': 0.5, 'snap': 0.3}, 'P': {'net': 1.0, 'snap': 0.3}, 'LS': {'snap': 1.0},
 }
 
+# ---------- the real 2026 season: rosters (weekly), for the two season starts ----------
+# Current file: each player's latest weekly row. Week-1 file: his week-1 row. ACT/INA = on the 53, RES = injured reserve.
+weekly = defaultdict(dict)
+for r in csv.DictReader(open(os.path.join(RAW, f'roster_weekly_{SEASON}.csv'))):
+    if r['gsis_id'] and r['game_type'] == 'REG': weekly[r['gsis_id']][int(r['week'])] = r
+season_team = {}
+for g, wk in weekly.items():
+    r = wk.get(1) if W1 else wk[max(wk)]
+    if not r or r['status'] not in ('ACT', 'INA', 'RES'): continue
+    t = ROSTER_FIX.get(r['team'], r['team'])
+    if t in NAME_TO_ABBR.values(): season_team[g] = (t, r['status'] == 'RES')
+
 # ---------- assemble players ----------
 players = []
 for g, c in contracts.items():
@@ -248,7 +267,7 @@ for g, c in contracts.items():
     if age is None:
         dy = c['draft_year'] or (int(xw['rookie_season']) if xw.get('rookie_season') else None)
         age = (START_YEAR - dy + 22) if dy else 27
-    if not r and not years:
+    if not r and not years and g not in season_team:
         continue  # not on a 2026 roster and no future contract: effectively out of the league
     on_roster = r is not None
     p = {
@@ -276,7 +295,7 @@ for p in players: by_pos[p['pos']].append(p)
 # 2. Track record (no salary): Pro Bowls / All-Pros fading with age, draft slot early in a career, and
 #    otherwise regression toward a ~70 player. Small samples lean on it.
 # 3. One league-wide scale, then position ceilings so each position's best lands around 93-97.
-RATE_YEARS = {2024: 0.15, 2025: 0.35, 2026: 0.50}          # recency weights (times games played)
+RATE_YEARS = {2024: 0.35, 2025: 0.50} if W1 else {2024: 0.15, 2025: 0.35, 2026: 0.50}   # recency weights (times games played)
 STARTER_SLOTS = {'QB': 1, 'RB': 1, 'WR': 3, 'TE': 1, 'OT': 2, 'IOL': 3, 'EDGE': 2, 'DL': 2, 'LB': 2, 'CB': 3, 'S': 2, 'K': 1, 'P': 1, 'LS': 1}
 OFF_POS = ('QB', 'RB', 'WR', 'TE', 'OT', 'IOL')
 def side_of(pos): return 'off' if pos in OFF_POS else 'st' if pos in ('K', 'P', 'LS') else 'def'
@@ -541,7 +560,7 @@ for p in players:
     kind, x = mv_features(p, 2026, p['age'] - 1)
     p['mv'] = round(max(0.0028, predict(kind, x)), 5)   # share of the cap
     p['mvKind'] = kind
-json.dump(sorted(holdout, key=lambda h: -h['share']), open(os.path.join(ROOT, 'tests', 'fa_holdout_2026.json'), 'w'), indent=0)
+if not W1: json.dump(sorted(holdout, key=lambda h: -h['share']), open(os.path.join(ROOT, 'tests', 'fa_holdout_2026.json'), 'w'), indent=0)
 # The held-out comparison is reported in one place only: tests/fa_market.test.js reads the market
 # values written to src/data.json, so the pipeline and the game can't disagree.
 print('held-out 2026 UFA deals ($2M+):', len(holdout))
@@ -681,7 +700,7 @@ def statline(g, pos, yr):
     return f"{gp} G"
 def statlines(g, pos):
     out = []
-    for yr in (2024, 2025, 2026):
+    for yr in ((2024, 2025) if W1 else (2024, 2025, 2026)):
         t = statline(g, pos, yr)
         if t: out.append([yr, (stats[yr].get(g) or {}).get('recent_team') or '', t])
     return out
@@ -698,7 +717,7 @@ for p in players:
     p['pb'] = pro_bowls.get(p['id'], 0)
     if p['draft'][1] == 1 and p['draft'][0] >= START_YEAR - 4:
         side = 'off' if p['pos'] in OFF_POS else 'def' if p['pos'] not in ('K', 'P', 'LS') else 'st'
-        p['pt'] = {str(yr): round(snap_share(p['id'], yr, side), 3) for yr in SNAP_YEARS if yr >= p['draft'][0]}
+        p['pt'] = {str(yr): round(snap_share(p['id'], yr, side), 3) for yr in SNAP_YEARS if yr >= p['draft'][0] and not (W1 and yr >= SEASON)}
 
 # ---------- league cap: implied by OverTheCap's cap_percent on big cap hits ----------
 implied = []
@@ -770,11 +789,75 @@ if os.path.exists(ov_path):
         print(f"override: {p['name']} {r['field']} {old} -> {p[r['field']]}")
 
 players.sort(key=lambda p: (p['team'] or 'ZZZ', -p['ovr']))
-out = {'meta': {'startYear': START_YEAR, 'cap': CAP_2027, 'curve': {'a': CA, 'b': CB, 'L': round(CL, 4), 'floor': FLOOR}, 'capProjected': True, 'subLabels': SUB_LABELS, 'optTable': opt_table, 'optGroup': OPT_GROUP,
+# ---------- season fields: 2026 contract row, team / injured reserve, stats to date ----------
+def season_row(g):
+    for c in sorted(all_contracts.get(g, []), key=lambda c: -(c['year_signed'] or 0)):
+        if (c['year_signed'] or 0) > SEASON: continue
+        run, _ = contract_years(c, SEASON)
+        if run and run[0]['y'] == SEASON:
+            row = dict(run[0]); row.pop('void', None); return row
+    return None
+STAT_MAP = {'pyd': ('passing_yards',), 'ptd': ('passing_tds',), 'int': ('passing_interceptions',), 'att': ('attempts',), 'car': ('carries',),
+            'ruyd': ('rushing_yards',), 'rutd': ('rushing_tds',), 'rec': ('receptions',), 'ryd': ('receiving_yards',), 'rtd': ('receiving_tds',),
+            'sk': ('def_sacks',), 'dint': ('def_interceptions',), 'tk': ('def_tackles_solo', 'def_tackle_assists'), 'fgm': ('fg_made',), 'fga': ('fg_att',)}
+for p in players:
+    st_ = season_team.get(p['id'])
+    if not st_: continue
+    p['t26'] = st_[0]
+    if st_[1]: p['ir26'] = 1
+    row = season_row(p['id'])
+    if row: p['y26'] = row
+    else:
+        # OverTheCap has no yearly detail for many 2026 signings: 2026 rookies get their slotted rookie deal
+        # in the game (from the pick number); other deals become flat rows at their average per year.
+        c = contracts.get(p['id'])
+        if c and c['draft_year'] == SEASON and c['draft_overall'] and (c['year_signed'] or 0) >= SEASON: p['rk26'] = c['draft_overall']
+        elif c and c['years'] and (c['year_signed'] or 0) + c['years'] - 1 >= SEASON:
+            ap = k(c['apy']); gt = k(c['guaranteed'] or 0)
+            p['f26'] = [{'y': y, 'base': ap, 'pro': 0, 'opt': 0, 'roster': 0, 'other': 0, 'gtd': min(ap, gt) if y == max(SEASON, c['year_signed']) else 0, 'cap': ap}
+                        for y in range(max(SEASON, c['year_signed']), c['year_signed'] + c['years'])]
+    if not W1:
+        sr = stats[SEASON].get(p['id'])
+        if sr and fnum(sr.get('games')):
+            s26 = {'g': int(fnum(sr['games']))}
+            for key, cols in STAT_MAP.items():
+                v = sum(fnum(sr.get(c_)) for c_ in cols)
+                if v: s26[key] = int(v) if key != 'sk' else round(v, 1)
+            p['s26'] = s26
+# 53-man limit: extra active players (practice-squad elevations, roster exemptions) leave the 53, lowest rated first
+by_team = defaultdict(list)
+for p in players:
+    if p.get('t26') and not p.get('ir26'): by_team[p['t26']].append(p)
+for t, lst in by_team.items():
+    lst.sort(key=lambda p: -p['ovr'])
+    for p in lst[53:]: p.pop('t26', None); p.pop('y26', None); p.pop('rk26', None); p.pop('f26', None)
+sizes = sorted(min(53, len(l)) for l in by_team.values())
+print('2026 active rosters (%s): %d-%d players with contracts; %d on injured reserve; 2026 rows: %d detailed, %d rookie scale, %d flat, %d none' % (
+    'week 1' if W1 else 'current', sizes[0], sizes[-1], sum(1 for p in players if p.get('ir26')), sum(1 for p in players if p.get('t26') and p.get('y26')),
+    sum(1 for p in players if p.get('t26') and p.get('rk26')), sum(1 for p in players if p.get('t26') and p.get('f26')), sum(1 for p in players if p.get('t26') and not (p.get('y26') or p.get('rk26') or p.get('f26')))))
+# schedule and results
+sched = []
+for r in csv.DictReader(open(os.path.join(RAW, 'games.csv'))):
+    if r['season'] != str(SEASON) or r['game_type'] != 'REG': continue
+    hm, aw = ROSTER_FIX.get(r['home_team'], r['home_team']), ROSTER_FIX.get(r['away_team'], r['away_team'])
+    played = r['result'] not in ('', 'NA') and not W1
+    sched.append([int(r['week']), aw, hm] + ([int(r['away_score']), int(r['home_score'])] if played else []))
+sched.sort(key=lambda x: x[0])
+n_weeks = max(x[0] for x in sched)
+real_week = 0
+for w in range(1, n_weeks + 1):
+    wk = [x for x in sched if x[0] == w]
+    if wk and all(len(x) == 5 for x in wk): real_week = w
+    else: break
+season_meta = {'year': SEASON, 'cap': CAP_HIST[SEASON], 'weeks': n_weeks, 'realWeek': real_week, 'realGames': sum(1 for x in sched if len(x) == 5),
+               'mode': 'week1' if W1 else 'current', 'games': sched}
+print('2026 schedule: %d games, %d weeks; real results through week %d (%d games played)' % (len(sched), n_weeks, real_week, season_meta['realGames']))
+
+out = {'meta': {'startYear': START_YEAR, 'season': season_meta, 'cap': CAP_2027, 'curve': {'a': CA, 'b': CB, 'L': round(CL, 4), 'floor': FLOOR}, 'capProjected': True, 'subLabels': SUB_LABELS, 'optTable': opt_table, 'optGroup': OPT_GROUP,
                 'draftOrder': d_order, 'draftOrderFinal': d_final, 'draftOrderGames': d_games, 'rosterFile': ROSTER_FILE,
                 'source': 'nflverse (contracts: OverTheCap), built ' + __import__('datetime').date.today().isoformat()},
        'players': players}
-json.dump(out, open(os.path.join(ROOT, 'src', 'data.json'), 'w'), separators=(',', ':'))
+json.dump(out, open(os.path.join(ROOT, 'src', 'data_w1.json' if W1 else 'data.json'), 'w'), separators=(',', ':'))
 print(len(players), 'players;', sum(1 for p in players if p['team']), 'under contract for', START_YEAR)
 for t in ('NE', 'KC'):
     tp = [p for p in players if p['team'] == t]

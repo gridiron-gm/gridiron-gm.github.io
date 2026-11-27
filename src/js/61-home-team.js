@@ -39,6 +39,7 @@ function divRank() {
 function newsList(items) {
   return items.length ? '<ul class="newsl">' + items.map(function (n) { return '<li><span class="when">' + n.y + ' ' + PHASE_LABEL[n.ph] + (n.ph === 'season' ? ' · wk ' + n.w : '') + '</span>' + esc(n.msg) + '</li>'; }).join('') + '</ul>' : '<p class="muted">Nothing yet.</p>';
 }
+function teamPlayers(abbr) { return roster(abbr).concat(reserve(abbr)); }
 function nextGameOf() { return S.phase === 'season' && S.week < WEEKS ? S.schedule[S.week].filter(function (g) { return g.h === S.user || g.a === S.user; })[0] : null; }
 
 // ---------- Home ----------
@@ -74,7 +75,7 @@ function nextStep(exp, nextGame) {
   if (S.phase === 'season' && n < ROSTER_MAX)
     return { bad: !!rf.short, big: n + '<small>of ' + ROSTER_MAX + '</small>', title: 'Fill your roster to ' + ROSTER_MAX, sub: n + ' players now.' + (rf.short ? ' You need ' + fmtM(rf.short) + ' more room.' : ''), btn: rf.short ? btn('make-room', 'Make room') : btn('auto-roster', 'Auto-fill') };
   switch (S.phase) {
-    case 'resign': return { big: exp.length + '<small>expiring</small>', title: 'Re-sign your expiring players', sub: exp.length + ' contracts expired. Anyone you don\'t re-sign hits free agency.', btn: btn('view', 'Review', ' data-v="resign"') };
+    case 'resign': return { big: exp.length + '<small>expiring</small>', title: 'Re-sign your expiring players', sub: exp.length + ' contracts expired. Anyone you don\'t re-sign hits free agency. Or let the AI run your whole offseason to week 1.', btn: btn('view', 'Review', ' data-v="resign"') + '<button class="btn" data-act="auto-manage">Auto-manage offseason</button>' };
     case 'fa': return { big: 'Day ' + (S.faDay + 1) + '<small>of ' + FA_DAYS + '</small>', title: 'Free agency is open', sub: 'Asks drop each day, but other teams sign players too. ' + fmtM(space(S.user)) + ' of room.', btn: btn('view', 'Browse free agents', ' data-v="fa"') };
     case 'draft':
       if (!draftLeft()) return { big: roster(S.user).length + '<small>on the roster</small>', title: 'Draft complete', sub: 'Continue runs final cuts to ' + ROSTER_MAX + ' for every team and starts week 1. You only stop if your roster can\'t get there under the cap.', btn: btn('view', 'See your picks', ' data-v="draft"') };
@@ -139,6 +140,8 @@ VIEWS.roster = function () {
     if (g[0]) h += '<div class="grp"><h3>' + g[0] + '</h3><span>' + g[1].length + ' · ' + fmtM(sumBy(g[1], function (p) { return Cap.capHit(p, S.year); })) + '</span></div>';
     h += '<div class="cards">' + g[1].map(function (p) { return pcard(p, { slot: slots[p.id] }); }).join('') + '</div>';
   });
+  var ir = reserve(S.user).filter(function (p) { return inGroup(p, UI.rgroup); });
+  if (ir.length) h += '<div class="grp"><h3>Injured reserve</h3><span>' + ir.length + ' · off the 53, still on the cap</span></div><div class="cards">' + ir.map(function (p) { return pcard(p); }).join('') + '</div>';
   return h;
 };
 
@@ -167,23 +170,23 @@ VIEWS.cap = function () {
   var team = T(S.user), years = [0, 1, 2, 3, 4].map(function (i) { return S.year + i; }), sp = space(S.user), rf = rosterFill(S.user);
   var h = titleRow('Team', segs(TEAM_SCREENS, 'cap'), capLabel());
   h += '<section class="panel pad" style="margin-bottom:14px"><div class="ps-row caprow">' +
-    '<div class="stat"><span>League cap (projected)</span><b>' + fmtM(capOf(S.year)) + '</b></div><div class="stat"><span>Contracts' + (top51(S.year) ? ' (top 51)' : '') + '</span><b>' + fmtM(committed(S.user)) + '</b></div>' +
+    '<div class="stat"><span>League cap' + (capProjected(S.year) ? ' (projected)' : '') + '</span><b>' + fmtM(capOf(S.year)) + '</b></div><div class="stat"><span>Contracts' + (top51(S.year) ? ' (top 51)' : '') + '</span><b>' + fmtM(committed(S.user)) + '</b></div>' +
     '<div class="stat"><span>Dead money</span><b class="' + (Cap.teamDead(team, S.year) ? 'neg' : '') + '">' + fmtM(Cap.teamDead(team, S.year)) + '</b></div><div class="stat"><span>Cap space (approx.)</span><b class="' + (sp < 0 ? 'neg' : 'good') + '">' + fmtM(sp) + '</b></div>' +
     '<div class="stat"><span>Room needed to fill ' + ROSTER_MAX + '</span><b class="' + (rf.short ? 'neg' : '') + '">' + fmtM(rf.need) + '</b></div></div>' + capBar() + '</section>';
   h += '<section class="panel tablewrap" style="margin-bottom:14px"><table class="dense"><thead><tr><th></th>' + years.map(function (y, i) { return '<th class="r' + (i > 2 ? ' hide-sm' : '') + '">' + y + '</th>'; }).join('') + '</tr></thead><tbody>';
   var row = function (label, f, cls) { return '<tr class="' + (cls || '') + '"><td>' + label + '</td>' + years.map(function (y, i) { return '<td class="r' + (i > 2 ? ' hide-sm' : '') + '">' + f(y) + '</td>'; }).join('') + '</tr>'; };
-  h += row('League cap (projected)', function (y) { return fmtM(capOf(y)); });
+  h += row('League cap', function (y) { return fmtM(capOf(y)) + (capProjected(y) ? ' <span class="muted small">proj.</span>' : ''); });
   h += row('Rollover', function (y) { return fmtM((team.rollover || {})[y] || 0); });
   h += row('Active contracts', function (y) { return fmtM(committed(S.user, y)) + (top51(y) ? ' <span class="muted small">top 51</span>' : ''); });
   h += row('Dead money', function (y) { return fmtM(Cap.teamDead(team, y)); });
   h += row('Cap space (approx.)', function (y) { var s = space(S.user, y); return '<b class="' + (s < 0 ? 'bad' : '') + '">' + fmtM(s) + '</b>'; }, 'total');
   h += row('Room needed to fill ' + ROSTER_MAX, function (y) { return y === S.year ? '<span class="' + (rf.short ? 'bad' : '') + '">' + fmtM(rf.need) + '</span>' : ''; });
-  h += row('Players under contract', function (y) { return roster(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
+  h += row('Players under contract', function (y) { return teamPlayers(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
   h += '</tbody></table></section><h3 class="sec">Contracts</h3><section class="panel tablewrap"><table class="dense"><thead><tr><th></th><th>Player</th><th class="hide-sm">Pos</th>' + years.map(function (y, i) { return '<th class="r' + (i > 2 ? ' hide-sm' : '') + '">' + y + '</th>'; }).join('') + '<th class="r hide-sm">Gtd left</th></tr></thead><tbody>';
-  roster(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
-    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td>' + avatar(p, 30, { shield: false }) + '</td><td><span class="pn">' + esc(p.name) + '</span></td><td class="hide-sm">' + p.pos + '</td>' + years.map(function (y, i) {
+  teamPlayers(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
+    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td>' + avatar(p, 30, { shield: false }) + '</td><td><span class="pn">' + esc(p.name) + '</span>' + (p.ir ? ' <span class="inj">IR</span>' : '') + '</td><td class="hide-sm">' + p.pos + '</td>' + years.map(function (y, i) {
       var r = Cap.row(p, y); return '<td class="r' + (r && r.void ? ' muted' : '') + (i > 2 ? ' hide-sm' : '') + '">' + (r ? fmtM(r.cap) + (r.void ? ' void' : '') : '') + '</td>';
     }).join('') + '<td class="r hide-sm">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td></tr>';
   });
-  return h + '</tbody></table></section><p class="note">League cap ' + fmtM(capOf(S.year)) + ' for ' + S.year + ' is projected; later years assume ~7% growth. Cap space is approximate: it counts every contract on the roster, this game\'s dead money and rollover, but not dead money from cuts made before the game started. Until week 1 only the 51 largest cap numbers count (the top-51 rule); from week 1 every contract counts. Future years are shown under the top-51 rule.</p>';
+  return h + '</tbody></table></section><p class="note">League cap ' + fmtM(capOf(S.year)) + ' for ' + S.year + (capProjected(S.year) ? ' is projected' : ' is the real figure') + '; later years are projected at ~7% growth. Cap space is approximate: it counts every contract on the roster, this game\'s dead money and rollover, but not dead money from cuts made before the game started. Until week 1 only the 51 largest cap numbers count (the top-51 rule); from week 1 every contract counts. Future years are shown under the top-51 rule.</p>';
 };

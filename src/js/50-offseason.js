@@ -20,7 +20,7 @@ function advance() {
       news('Free agency is open. ' + freeAgents().filter(function (p) { return p.ovr >= 75; }).length + ' players rated 75+ are available.');
       break;
     case 'fa':
-      if (S.faDay < FA_DAYS) { aiFreeAgencyDay(); S.faDay++; if (S.faDay < FA_DAYS) break; }
+      if (S.faDay < FA_DAYS) { aiFreeAgencyDay(); if (S.faDay >= FA_DAYS - 2) aiPlaceGoodFAs(); S.faDay++; if (S.faDay < FA_DAYS) break; }
       startDraft(); S.phase = 'draft';
       break;
     case 'draft':
@@ -70,7 +70,9 @@ function finalCuts() {
 // Week-1 top-up: a team left short by its cap clean-up signs undrafted rookies at the minimum, only if it
 // already has the room (no cuts, no restructures).
 function topUp(abbr) {
-  var guard = 0, price = Cap.minSalary(FILLER_PRICE_EXP, S.year);
+  var guard = 0, price = Cap.minSalary(FILLER_PRICE_EXP, S.year), missing = ROSTER_MAX - roster(abbr).length;
+  // no room for the minimum deals: make it (restructures first; young stars are never cut)
+  if (missing > 0 && fullSpace(abbr) < price * missing) restructureFor(abbr, price * missing - fullSpace(abbr) + 200, 300);
   while (roster(abbr).length < ROSTER_MAX && fullSpace(abbr) >= price && guard++ < 10) {
     var counts = {}; roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
     if (!sign(makeFiller(fillNeedPos(counts)), abbr, { years: 1, total: price, bonus: 0, gtd: 0 }, true).ok) break;
@@ -92,14 +94,39 @@ function advanceSeason() {
   return { ok: true };
 }
 
-// Quick start: the AI runs the whole offseason for every team, yours included (re-signings, fifth-year
-// options, free agency, draft, cutdown to 53 under the cap). You take over at week 1. Returns a summary
-// of what happened to your team.
-function quickStart() {
+// Auto-manage offseason: the AI runs the offseason for your team too (fifth-year options, free agency, the
+// draft, cuts to 53 under the cap) and you take over at week 1. With resignFirst (the "Auto-manage offseason"
+// button) your best expiring players are re-signed FIRST: starters and anyone 75+ under 31, best first, at
+// their asking price, as long as you keep room to fill 53 at the minimum. Returns a recap.
+function userResignPass() {
+  var U = S.user, kept = [];
+  pendingOptions(U).forEach(function (p) { decideFifthYear(p, optionWorthIt(p)); });
+  var starterAt = function (p) { return roster(U).filter(function (q) { return q.pos === p.pos && q.ovr > p.ovr; }).length < Market.STARTERS[p.pos]; };
+  S.players.filter(function (p) { return p.rights === U && !p.team && (starterAt(p) || (p.ovr >= 75 && p.age < 31)); })
+    .sort(byKey(function (p) { return p.ovr * 10 - Math.max(0, p.age - 26) * 4; }, true)).forEach(function (p) {
+      var d = Market.demand(p, marketCap(), S.year);
+      var offer = { years: d.years, total: Math.round(d.apy * d.years), bonus: Math.round(d.gtd * 0.5), gtd: d.gtd };
+      var hit = Cap.buildContract(offer, S.year, p.exp)[0].cap;
+      var fits = function () { return space(U) - hit >= 0 && rosterFill(U, 1, hit, p.pos).short <= 0; };   // keep room to fill 53
+      // a good young starter is worth restructuring for (restructures only: auto-manage never cuts to make room)
+      if (!fits() && p.ovr >= 75 && p.age < 31) restructureFor(U, hit + Math.max(0, rosterFill(U, 1, hit, p.pos).short));
+      if (!fits()) return;
+      if (sign(p, U, offer, true).ok) kept.push(p.id);
+    });
+  return kept;
+}
+function restructureFor(abbr, need, minAmount) {
+  var got = 0;
+  roster(abbr).map(function (q) { return { q: q, m: Cap.restructureMax(q, S.year, q.exp) }; }).filter(function (x) { return x.m > (minAmount || 1000); })
+    .sort(byKey(function (x) { return x.m; }, true)).forEach(function (x) { if (got < need) got += restructurePlayer(x.q, x.m).saved || 0; });
+  return got;
+}
+function autoOffseason(resignFirst) {
   var U = S.user, Y = S.year;
   var before = {}; roster(U).forEach(function (p) { before[p.id] = 'roster'; });
   S.players.forEach(function (p) { if (p.rights === U && !p.team) before[p.id] = 'expiring'; });
   var opts = pendingOptions(U).map(function (p) { return p.id; });
+  if (resignFirst) userResignPass();
   S.autopilot = true;
   var guard = 0;
   while (S.phase !== 'season' && guard++ < 60) {
@@ -111,7 +138,7 @@ function quickStart() {
   var after = roster(U), sum = { year: Y, left: [], resigned: [], signed: [], drafted: [], options: [] };
   Object.keys(before).forEach(function (id) {
     var p = P(id); if (!p || p.team === U) return;
-    sum.left.push({ id: id, name: p.name, pos: p.pos, ovr: p.ovr, to: p.retired ? 'retired' : p.team || 'unsigned', was: before[id] });
+    sum.left.push({ id: id, name: p.name, pos: p.pos, ovr: p.ovr, age: p.age, to: p.retired ? 'retired' : p.team || 'unsigned', was: before[id] });
   });
   after.forEach(function (p) {
     if (before[p.id] === 'expiring') sum.resigned.push(p.id);
@@ -123,9 +150,11 @@ function quickStart() {
   sum.resigned.sort(byKey(ovr, true)); sum.signed.sort(byKey(ovr, true));
   sum.drafted.sort(byKey(function (id) { return P(id).draft[2]; }));
   S.quickSummary = sum;
-  news('Quick start: the ' + Y + ' offseason ran on autopilot. Week 1 is next.', U);
+  news('Auto-managed offseason: the ' + Y + ' offseason ran for you. Week 1 is next.', U);
   return sum;
 }
+function autoManageOffseason() { return autoOffseason(true); }
+function quickStart() { return autoOffseason(false); }   // old behavior, kept for comparison in tests
 
 // in-season: AI teams replace injured starters with free agents now and then
 function aiInSeason() {
@@ -141,7 +170,8 @@ function aiInSeason() {
 }
 function cutdownOne(abbr, avoidPos) {
   var c = roster(abbr).filter(function (p) { return p.pos !== avoidPos && !p.inj; }).sort(byKey(function (p) { return p.ovr + releasePreview(p).now / 1000; }))[0];
-  if (c && space(abbr) + releasePreview(c).savings >= 0) release(c, false);
+  if (c && space(abbr) + releasePreview(c).savings >= 0) { release(c, false); return c.name; }
+  return null;
 }
 
 // ---------- draft ----------
@@ -345,14 +375,18 @@ function endOfYear() {
   // career stats; playing time for first-round picks' option tiers (share of games started)
   S.players.forEach(function (p) {
     Object.keys(p.s || {}).forEach(function (k) { p.car[k] = (p.car[k] || 0) + p.s[k]; }); p.last = p.s;
-    if (p.draft && p.draft[1] === 1 && p.draft[0] >= Y - 2) { p.pt = p.pt || {}; p.pt[Y] = Math.round(Math.min(1, (p.s.g || 0) / WEEKS) * 1000) / 1000; }
+    // (real snap shares from the data are kept for the season the game started in)
+    if (p.draft && p.draft[1] === 1 && p.draft[0] >= Y - 2) { p.pt = p.pt || {}; if (p.pt[Y] == null) p.pt[Y] = Math.round(Math.min(1, (p.s.g || 0) / GAMES) * 1000) / 1000; }
+    p.ir = false;
   });
   // fifth-year option salary table for next league year, from this year's cap numbers
   S.optTables = S.optTables || {};
-  S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);
-  var perf = performanceDeltas();
+  if (Y + 1 !== BASE.startYear) S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);   // the real 2027 table is in the data
+  // 'current' starts: ratings already include this season's real production, so only aging moves them this once
+  var perf = S.startMode === 'current' && BASE.season && Y === BASE.season.year ? {} : performanceDeltas();
   // cap rollover into next league year
-  TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
+  // no rollover out of 2026: the data's 2026 cap space is approximate (missing dead money and rollover)
+  if (!(BASE.season && Y === BASE.season.year)) TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
   var retired = [];
   S.players.forEach(function (p) {
     if (p.retired) return;

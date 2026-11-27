@@ -889,6 +889,9 @@ table.dense td:first-child:has(> .avw), table.dense td:first-child:has(> .shield
 .qs > span > .lbl-l { display: inline; font: inherit; letter-spacing: inherit; color: inherit; }
 .qs > span > .lbl-s { display: none; font: inherit; letter-spacing: inherit; color: inherit; }
 @media (max-width: 760px) { .qs > span > .lbl-l { display: none; } .qs > span > .lbl-s { display: inline; } }
+
+.realwk { color: #fff; }
+.issues.plain li::before { content: '›'; background: var(--tc2b); color: #fff; }
 </style>
 </head>
 <body>
@@ -1524,10 +1527,13 @@ var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft',
 var ROSTER_MAX_OFF = 90, ROSTER_MAX = 53, FA_DAYS = 6, TRADE_DEADLINE_WEEK = 9;
 
 // seed: pass a number to make the whole league reproducible (same seed + same choices = same results)
-function newGame(data, userAbbr, seed) {
+// mode: 'current' (the real 2026 season at the current week), 'week1' (replay 2026 from week 1, with the
+// week-1 data file), or nothing for the 2027 offseason (used by the cap/market tests).
+function newGame(data, userAbbr, seed, mode) {
+  var season = (mode === 'current' || mode === 'week1') && data.meta.season;
   BASE = data.meta;
   Market.setCurve(BASE.curve); Market.setScale(1);
-  S = { v: 1, seed: seed != null && seed !== '' && !isNaN(+seed) ? (+seed | 0) : (Date.now() % 1e9) | 0, fixedSeed: seed != null && seed !== '' && !isNaN(+seed), year: data.meta.startYear, phase: 'resign', faDay: 0, week: 0,
+  S = { v: 1, seed: seed != null && seed !== '' && !isNaN(+seed) ? (+seed | 0) : (Date.now() % 1e9) | 0, fixedSeed: seed != null && seed !== '' && !isNaN(+seed), year: season ? season.year : data.meta.startYear, phase: season ? 'season' : 'resign', faDay: 0, week: 0, startMode: season ? mode : 'offseason',
         user: userAbbr, teams: {}, picks: [], players: [], schedule: [], news: [], playoffs: null, history: [],
         draft: null, nextId: 1, june1: {}, lastOrder: null, awards: [] };
   RNG.s = S.seed;
@@ -1539,9 +1545,11 @@ function newGame(data, userAbbr, seed) {
     p.inj = 0; p.s = {}; p.car = {}; p.rej = 0; p.peak = p.ovr; p.trait = p.trait || 'Normal';
     p.rights = p.team ? null : p.prevTeam;   // own team can re-sign expiring players in the re-sign window
     if (p.team && !TEAM[p.team]) p.team = null;
+    if (season) seasonPlayer(p, src, mode);
     S.players.push(p);
   });
-  for (var y = S.year; y < S.year + 3; y++) addPicks(y);
+  for (var y = S.year + (season ? 1 : 0); y < S.year + 3 + (season ? 1 : 0); y++) addPicks(y);
+  if (season) { reindex(); seasonStart(season, mode); }
   // starting number of 80+ players per position: draft class strength steers back toward it
   S.target80 = {}; S.classBoost = {};
   S.targetPipe = {};
@@ -1553,8 +1561,54 @@ function newGame(data, userAbbr, seed) {
   S.payScale = 1;   // pay multiplier retired: market value + the fitted salary curve set prices
   S.driftScale = Market.calibrateDrift(S.players);   // market-value drift level matches the real starting market
   TEAMS.forEach(function (t) { autoDepth(t.abbr); });
-  news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
+  if (season) news('Welcome to the ' + TEAM[userAbbr].name + '. ' + (mode === 'current' ? 'Real ' + season.year + ' results are in through week ' + season.realWeek + '; you take over from here.' : 'The ' + season.year + ' season starts at week 1 with week-1 rosters.'));
+  else news('Welcome to the ' + TEAM[userAbbr].name + '. The ' + S.year + ' league year has started: re-sign your expiring players before free agency opens.');
   return S;
+}
+
+// ---------- starting inside the real 2026 season ----------
+var IR_WEEKS = 6;          // players on injured reserve at the start sit this many weeks (return dates aren't in the data)
+function seasonPlayer(p, src, mode) {
+  var Y = BASE.season.year;
+  p.age -= 1; p.exp = Math.max(0, (p.exp || 0) - 1);          // data ages and experience are as of the 2027 league year
+  p.rights = null;
+  p.team = src.t26 && TEAM[src.t26] ? src.t26 : null;
+  var fut = (src.years || []).map(function (r) { return JSON.parse(JSON.stringify(r)); });
+  if (!p.team) { p.years = []; p.options = []; }
+  else if (src.y26) p.years = [JSON.parse(JSON.stringify(src.y26))].concat(fut);
+  else if (src.f26) { var last = src.f26[src.f26.length - 1].y; p.years = src.f26.map(function (r) { return JSON.parse(JSON.stringify(r)); }).concat(fut.filter(function (r) { return r.y > last; })); }
+  else if (src.rk26) { p.years = Cap.buildContract(Cap.rookieDeal(src.rk26, Y, BASE.season.cap), Y, 0); p.options = []; }
+  else p.years = [{ y: Y, base: Cap.minSalary(p.exp, Y), pro: 0, opt: 0, roster: 0, other: 0, gtd: 0, cap: Cap.minSalary(p.exp, Y) }].concat(fut);
+  if (p.team) { p.apy = p.apy || Cap.apy(p.years); p.prevTeam = p.team; }
+  if (p.team && p.num == null) p.num = freeNumber(p.team, p.pos);
+  if (p.team && src.ir26) { p.ir = true; p.inj = IR_WEEKS; p.injNote = 'Injured reserve'; }
+  p.s = mode === 'current' && src.s26 ? JSON.parse(JSON.stringify(src.s26)) : {};
+}
+function seasonStart(season, mode) {
+  var Y = season.year;
+  // fill any team short of 53 with undrafted rookies at the minimum (players the contract data doesn't cover)
+  TEAMS.forEach(function (t) {
+    var guard = 0;
+    while (roster(t.abbr).length < ROSTER_MAX && guard++ < 10) {
+      var counts = {}; roster(t.abbr).forEach(function (q) { counts[q.pos] = (counts[q.pos] || 0) + 1; });
+      var f = makeFiller(fillNeedPos(counts)), price = Cap.minSalary(0, Y);
+      f.age -= 1; f.team = t.abbr; f.years = Cap.buildContract({ years: 1, total: price, bonus: 0, gtd: 0 }, Y, 0); f.apy = price; f.num = freeNumber(t.abbr, f.pos);
+    }
+  });
+  // 2026 cap: the data misses dead money and rollover, so a team the data puts over the cap is set to exactly the cap
+  TEAMS.forEach(function (t) {
+    var team = T(t.abbr), over = Cap.teamCommitted(S.players, team, Y, false) + Cap.teamDead(team, Y) - Cap.teamCap(team, Y);
+    if (over > 0) { team.capBase[Y] += over; team.capAdj = over; }
+  });
+  // the real schedule; in 'current' mode the games already played keep their real scores
+  S.schedule = [];
+  season.games.forEach(function (g) {
+    var w = g[0] - 1; while (S.schedule.length <= w) S.schedule.push([]);
+    var game = { h: g[2], a: g[1], hs: null, as: null };
+    if (mode === 'current' && g.length === 5) { game.as = g[3]; game.hs = g[4]; game.real = true; record(game.h, game.a, game.hs, game.as); }
+    S.schedule[w].push(game);
+  });
+  S.week = mode === 'current' ? season.realWeek : 0;
 }
 
 function newRec() { return { w: 0, l: 0, t: 0, pf: 0, pa: 0, dw: 0, dl: 0, cw: 0, cl: 0 }; }
@@ -1568,9 +1622,11 @@ function news(msg, team) { S.news.unshift({ y: S.year, ph: S.phase, w: S.week, m
 // ---------- lookups ----------
 function P(id) { return S._idx ? S._idx[id] : S.players.filter(function (p) { return p.id === id; })[0]; }
 function reindex() { S._idx = {}; S.players.forEach(function (p) { S._idx[p.id] = p; }); }
-function roster(abbr) { return S.players.filter(function (p) { return p.team === abbr; }); }
+// the 53 (players on injured reserve still count against the cap, but not against the 53)
+function roster(abbr) { return S.players.filter(function (p) { return p.team === abbr && !p.ir; }); }
+function reserve(abbr) { return S.players.filter(function (p) { return p.team === abbr && p.ir; }); }
 function freeAgents() { return S.players.filter(function (p) { return !p.team && !p.retired && !p.prospect; }); }
-function capOf(year) { return Cap.leagueCap(BASE.cap, BASE.startYear, year); }
+function capOf(year) { return BASE.season && year === BASE.season.year ? BASE.season.cap : Cap.leagueCap(BASE.cap, BASE.startYear, year); }
 // The money actually available: league cap plus the average rollover. Player prices follow this.
 function marketCap() {
   var y = S.year, roll = 0;
@@ -1616,13 +1672,14 @@ function decideFifthYear(p, exercise) {
 function pendingOptions(abbr) { return roster(abbr).filter(function (p) { var i = fifthYearInfo(p); return i && i.open; }); }
 // AI: pick up the option when the guaranteed amount is no more than he'd be worth next year (with some
 // slack for stars, whom teams lock in).
+function optionWorthIt(p) {
+  var info = fifthYearInfo(p);
+  var worth = Market.valueAt(p.pos, Market.projOvr(p, 1), marketCap() * 1.07, p.exp + 1, S.year + 1);
+  return info.amount <= worth * (p.ovr >= 80 ? 1.9 : p.ovr >= 72 ? 1.5 : 1.15);
+}
 function aiFifthYearDecisions() {
   aiTeams().forEach(function (abbr) {
-    pendingOptions(abbr).forEach(function (p) {
-      var info = fifthYearInfo(p);
-      var worth = Market.valueAt(p.pos, Market.projOvr(p, 1), marketCap() * 1.07, p.exp + 1, S.year + 1);
-      decideFifthYear(p, info.amount <= worth * (p.ovr >= 80 ? 1.9 : p.ovr >= 72 ? 1.5 : 1.15));
-    });
+    pendingOptions(abbr).forEach(function (p) { decideFifthYear(p, optionWorthIt(p)); });
   });
 }
 function isPostJune() { return S.phase === 'preseason' || S.phase === 'season' || S.phase === 'playoffs'; }
@@ -1878,16 +1935,39 @@ function aiCapFix(abbr, buffer, keepYoungStars) {
   }
 }
 
+// Make room for a better player by releasing lesser veterans (rated below him, never young stars), biggest
+// savings first, until the room is there. Only if it can actually get there; no restructures.
+function cutForRoom(abbr, need, betterThan) {
+  var cands = roster(abbr).filter(function (q) { return q.ovr < betterThan - 3 && !(q.ovr >= 78 && q.age < 30); })
+    .map(function (q) { return { q: q, pv: releasePreview(q, false) }; }).filter(function (x) { return x.pv.savings > 1000; })
+    .sort(byKey(function (x) { return x.pv.savings / Math.max(1, x.q.ovr - 50); }, true));
+  var have = space(abbr), plan = [];
+  for (var i = 0; i < cands.length && have < need && plan.length < 6; i++) { plan.push(cands[i]); have += cands[i].pv.savings; }
+  if (have < need) return false;
+  plan.forEach(function (x) { release(x.q, false); });
+  return true;
+}
+
 // End of re-sign window: AI teams keep the expiring players they want; everyone else hits free agency.
+var CORE_KEEP = 0.9;
+var CORE_CUSHION = 4000;
+
 function aiResign() {
   aiTeams().forEach(function (abbr) {
     aiCapFix(abbr, 25000);
     var mine = S.players.filter(function (p) { return !p.team && p.rights === abbr; }).sort(byKey(function (p) { return p.ovr; }, true));
     mine.forEach(function (p) {
       var want = p.ovr >= 62 && p.age <= 32 && (needAt(abbr, p.pos, p.ovr) > 0 || p.ovr >= 74);
-      if (!want || RNG.next() > (p.ovr >= 75 ? 0.92 : 0.75)) return;
-      var off = aiOffer(p, abbr, 1.0);
-      if (space(abbr) - Cap.buildContract(off, S.year, p.exp)[0].cap > aiReserve(abbr)) sign(p, abbr, off, true);
+      // about half of good young players re-sign in the real NFL (2026 class: 51% stayed); the rest test the market
+      if (!want || RNG.next() > (p.ovr >= 75 && p.age < 31 ? CORE_KEEP : p.ovr >= 75 ? 0.92 : 0.75)) return;
+      var off = aiOffer(p, abbr, 1.0), hit = Cap.buildContract(off, S.year, p.exp)[0].cap;
+      // good young players (75+, under 31): teams hold back only the room to fill 53 plus a $4M cushion (not the
+      // usual $9M). Room is made only by cutting lesser veterans: restructuring pushed money into later years
+      // and left teams far over the cap a year or two on.
+      var core = p.ovr >= 75 && p.age < 31;
+      // a team may cut lesser veterans (never restructure) to keep a core player
+      if (core && space(abbr) - hit <= rosterFill(abbr).need + CORE_CUSHION) cutForRoom(abbr, hit + rosterFill(abbr).need + CORE_CUSHION, p.ovr);
+      if (space(abbr) - hit > (core ? rosterFill(abbr).need + CORE_CUSHION : aiReserve(abbr))) sign(p, abbr, off, true);
     });
   });
   S.players.forEach(function (p) { if (!p.team) p.rights = null; });
@@ -1933,10 +2013,37 @@ function aiFreeAgencyDay() {
   }
 }
 
+// End of free agency: good young players (75+, under 31) still unsigned take a fair deal from a team that
+// can afford them while still filling 53. Asks have come down by now (down to 40% for the last ones).
+// Real good young free agents sign somewhere in free agency; without this a third of them sat unsigned.
+function aiPlaceGoodFAs() {
+  // the best-placed team pays as much as it can, down to the late market's 25% floor (prove-it deals)
+  var disc = Math.max(0.25, 1 - Market.faDiscount(S.faDay) - 0.2);
+  freeAgents().filter(function (p) { return p.ovr >= 75 && p.age < 31 && !p.prospect; }).sort(byKey(function (p) { return p.ovr; }, true)).forEach(function (p) {
+    var dm = Market.demand(p, marketCap(), S.year), yrs = Math.max(1, Math.min(dm.years, 3)), full = Math.round(dm.apy * Math.max(0.6, disc)), price = Math.round(dm.apy * disc);
+    // pay the fair (60%+) price if a team has that room; otherwise the cheapest acceptable prove-it price
+    var rich = aiTeams().filter(function (a) { return roster(a).length < rosterMax() - 1 && space(a) - rosterFill(a).need - CORE_CUSHION - full >= 0; });
+    if (rich.length) price = full; else yrs = 1;
+    var teams = aiTeams().filter(function (a) { return roster(a).length < rosterMax() - 1; })
+      .map(function (a) { return { a: a, room: space(a) - rosterFill(a).need - CORE_CUSHION - price }; }).filter(function (t) { return t.room >= 0; })
+      .sort(byKey(function (t) { return needAt(t.a, p.pos, p.ovr) * 100000 + t.room; }, true));
+    if (!teams.length) {   // nobody has the room with the cushion: the team that needs him most can use its cushion
+      // the neediest teams (up to eight) try to make room by cutting lesser veterans, at the prove-it price
+      var needy = aiTeams().filter(function (a) { return roster(a).length < rosterMax() - 1; }).sort(byKey(function (a) { return needAt(a, p.pos, p.ovr) * 100000 + space(a); }, true)).slice(0, 8);
+      for (var ni = 0; ni < needy.length && !teams.length; ni++) {
+        var a = needy[ni];
+        if (space(a) - rosterFill(a).need - price < 0) cutForRoom(a, price + rosterFill(a).need, p.ovr);
+        if (space(a) - rosterFill(a).need - price >= 0) teams = [{ a: a }];
+      }
+    }
+    if (teams.length) sign(p, teams[0].a, { years: yrs, total: price * yrs, bonus: Math.round(price * 0.3), gtd: Math.round(price * 0.6) }, true);
+  });
+}
+
 // Late market (preseason): good players still unsigned take one-year "prove-it" deals for whatever room
 // a team has, as long as it reaches about a third of their ask. Teams with the most room go first.
 // room that will still be there at week 1, when every contract counts (not just the top 51)
-function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 4500; }   // AI keeps a $4.5M in-season buffer
+function lateRoom(a) { return Math.min(space(a), fullSpace(a)) - 5500; }   // AI keeps a $5.5M in-season buffer
 function aiLateMarket() {
   freeAgents().filter(function (p) { return p.ovr >= 78; }).sort(byKey(function (p) { return p.ovr - (p.age >= 30 ? 10 : 0); }, true)).forEach(function (p) {
     // a young player still unsigned this late takes a cheaper prove-it deal (25% of his ask; vets 35%)
@@ -2178,10 +2285,12 @@ function makeRoomOptions(abbr) {
 }
 
 // Schedule, game sim from team strength, injuries, stats, standings, playoffs.
-var WEEKS = 17;
+var WEEKS = 18;          // 17 games and one bye per team
+var GAMES = 17;
 
 function makeSchedule() {
-  // 17 rounds, each a perfect matching of all 32 teams: 6 division rounds + 11 non-division rounds.
+  // 18 weeks: 6 division rounds + 12 non-division rounds. Eight of the non-division rounds give 4 teams a bye
+  // (every team gets exactly one), so each team plays 17 games.
   var abbrs = TEAMS.map(function (t) { return t.abbr; });
   var divs = {};
   TEAMS.forEach(function (t) { (divs[t.conf + t.div] = divs[t.conf + t.div] || []).push(t.abbr); });
@@ -2202,9 +2311,13 @@ function makeSchedule() {
   function sameDiv(a, b) { return TEAM[a].conf === TEAM[b].conf && TEAM[a].div === TEAM[b].div; }
   var homeCount = {};
   abbrs.forEach(function (a) { homeCount[a] = 3; });
-  for (var r = 0; r < 11; r++) {
-    for (var attempt = 0; attempt < 400; attempt++) {
-      var left = RNG.shuffle(abbrs.slice()), games = [], okRound = true;
+  var byeGroups = [], sh = RNG.shuffle(abbrs.slice());
+  for (var bg = 0; bg < 8; bg++) byeGroups.push(sh.slice(bg * 4, bg * 4 + 4));
+  var BYE_ROUND = { 3: 0, 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7 };   // non-division round -> bye group
+  for (var r = 0; r < 12; r++) {
+    var bye = BYE_ROUND[r] != null ? byeGroups[BYE_ROUND[r]] : [];
+    for (var attempt = 0; attempt < 600; attempt++) {
+      var left = RNG.shuffle(abbrs.filter(function (a) { return bye.indexOf(a) < 0; })), games = [], okRound = true;
       while (left.length) {
         var a = left.shift();
         var idx = -1;
@@ -2221,8 +2334,8 @@ function makeSchedule() {
       }
     }
   }
-  // interleave: spread division games across the season
-  var order = [6, 0, 7, 8, 1, 9, 10, 2, 11, 12, 13, 3, 14, 15, 4, 16, 5];
+  // interleave: spread division games across the season (rounds 0-5 division, 6-17 non-division; byes mid-season)
+  var order = [6, 0, 7, 8, 1, 9, 10, 2, 11, 12, 13, 3, 14, 15, 16, 4, 17, 5];
   S.schedule = order.filter(function (i) { return rounds[i]; }).map(function (i) { return rounds[i].map(function (g) { return { h: g.h, a: g.a, hs: null, as: null }; }); });
 }
 
@@ -2308,6 +2421,14 @@ function injuries(abbr) {
     }
   });
 }
+// injured-reserve players whose time is up rejoin the 53; a full team releases its weakest player for him
+function returnFromReserve() {
+  S.players.forEach(function (p) {
+    if (!p.ir || p.inj || !p.team) return;
+    p.ir = false; p.injNote = null;
+    if (roster(p.team).length > ROSTER_MAX) { var cut = cutdownOne(p.team, p.pos); if (p.team === S.user) news(p.name + ' returned from injured reserve' + (cut ? '; ' + cut + ' was released to make room.' : '.'), p.team); }
+  });
+}
 function healInjuries() { S.players.forEach(function (p) { if (p.inj && p.inj < 99) { p.inj--; if (!p.inj) p.injNote = null; } }); }
 
 function record(home, away, hs, as) {
@@ -2325,11 +2446,13 @@ function simWeek() {
   if (S.week === 0) S.players.forEach(function (p) { if (p.team) Cap.exerciseOptions(p, S.year); });
   Object.keys(S.teams).forEach(function (a) { if (a !== S.user) autoDepth(a); });
   S.schedule[S.week].forEach(function (g) {
+    if (g.hs != null) return;                 // already played for real
     var r = simGame(g.h, g.a);
     g.hs = r.hs; g.as = r.as;
     record(g.h, g.a, r.hs, r.as);
   });
   healInjuries();
+  returnFromReserve();
   S.week++;
   return true;
 }
@@ -2415,7 +2538,7 @@ function advance() {
       news('Free agency is open. ' + freeAgents().filter(function (p) { return p.ovr >= 75; }).length + ' players rated 75+ are available.');
       break;
     case 'fa':
-      if (S.faDay < FA_DAYS) { aiFreeAgencyDay(); S.faDay++; if (S.faDay < FA_DAYS) break; }
+      if (S.faDay < FA_DAYS) { aiFreeAgencyDay(); if (S.faDay >= FA_DAYS - 2) aiPlaceGoodFAs(); S.faDay++; if (S.faDay < FA_DAYS) break; }
       startDraft(); S.phase = 'draft';
       break;
     case 'draft':
@@ -2465,7 +2588,9 @@ function finalCuts() {
 // Week-1 top-up: a team left short by its cap clean-up signs undrafted rookies at the minimum, only if it
 // already has the room (no cuts, no restructures).
 function topUp(abbr) {
-  var guard = 0, price = Cap.minSalary(FILLER_PRICE_EXP, S.year);
+  var guard = 0, price = Cap.minSalary(FILLER_PRICE_EXP, S.year), missing = ROSTER_MAX - roster(abbr).length;
+  // no room for the minimum deals: make it (restructures first; young stars are never cut)
+  if (missing > 0 && fullSpace(abbr) < price * missing) restructureFor(abbr, price * missing - fullSpace(abbr) + 200, 300);
   while (roster(abbr).length < ROSTER_MAX && fullSpace(abbr) >= price && guard++ < 10) {
     var counts = {}; roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
     if (!sign(makeFiller(fillNeedPos(counts)), abbr, { years: 1, total: price, bonus: 0, gtd: 0 }, true).ok) break;
@@ -2487,14 +2612,39 @@ function advanceSeason() {
   return { ok: true };
 }
 
-// Quick start: the AI runs the whole offseason for every team, yours included (re-signings, fifth-year
-// options, free agency, draft, cutdown to 53 under the cap). You take over at week 1. Returns a summary
-// of what happened to your team.
-function quickStart() {
+// Auto-manage offseason: the AI runs the offseason for your team too (fifth-year options, free agency, the
+// draft, cuts to 53 under the cap) and you take over at week 1. With resignFirst (the "Auto-manage offseason"
+// button) your best expiring players are re-signed FIRST: starters and anyone 75+ under 31, best first, at
+// their asking price, as long as you keep room to fill 53 at the minimum. Returns a recap.
+function userResignPass() {
+  var U = S.user, kept = [];
+  pendingOptions(U).forEach(function (p) { decideFifthYear(p, optionWorthIt(p)); });
+  var starterAt = function (p) { return roster(U).filter(function (q) { return q.pos === p.pos && q.ovr > p.ovr; }).length < Market.STARTERS[p.pos]; };
+  S.players.filter(function (p) { return p.rights === U && !p.team && (starterAt(p) || (p.ovr >= 75 && p.age < 31)); })
+    .sort(byKey(function (p) { return p.ovr * 10 - Math.max(0, p.age - 26) * 4; }, true)).forEach(function (p) {
+      var d = Market.demand(p, marketCap(), S.year);
+      var offer = { years: d.years, total: Math.round(d.apy * d.years), bonus: Math.round(d.gtd * 0.5), gtd: d.gtd };
+      var hit = Cap.buildContract(offer, S.year, p.exp)[0].cap;
+      var fits = function () { return space(U) - hit >= 0 && rosterFill(U, 1, hit, p.pos).short <= 0; };   // keep room to fill 53
+      // a good young starter is worth restructuring for (restructures only: auto-manage never cuts to make room)
+      if (!fits() && p.ovr >= 75 && p.age < 31) restructureFor(U, hit + Math.max(0, rosterFill(U, 1, hit, p.pos).short));
+      if (!fits()) return;
+      if (sign(p, U, offer, true).ok) kept.push(p.id);
+    });
+  return kept;
+}
+function restructureFor(abbr, need, minAmount) {
+  var got = 0;
+  roster(abbr).map(function (q) { return { q: q, m: Cap.restructureMax(q, S.year, q.exp) }; }).filter(function (x) { return x.m > (minAmount || 1000); })
+    .sort(byKey(function (x) { return x.m; }, true)).forEach(function (x) { if (got < need) got += restructurePlayer(x.q, x.m).saved || 0; });
+  return got;
+}
+function autoOffseason(resignFirst) {
   var U = S.user, Y = S.year;
   var before = {}; roster(U).forEach(function (p) { before[p.id] = 'roster'; });
   S.players.forEach(function (p) { if (p.rights === U && !p.team) before[p.id] = 'expiring'; });
   var opts = pendingOptions(U).map(function (p) { return p.id; });
+  if (resignFirst) userResignPass();
   S.autopilot = true;
   var guard = 0;
   while (S.phase !== 'season' && guard++ < 60) {
@@ -2506,7 +2656,7 @@ function quickStart() {
   var after = roster(U), sum = { year: Y, left: [], resigned: [], signed: [], drafted: [], options: [] };
   Object.keys(before).forEach(function (id) {
     var p = P(id); if (!p || p.team === U) return;
-    sum.left.push({ id: id, name: p.name, pos: p.pos, ovr: p.ovr, to: p.retired ? 'retired' : p.team || 'unsigned', was: before[id] });
+    sum.left.push({ id: id, name: p.name, pos: p.pos, ovr: p.ovr, age: p.age, to: p.retired ? 'retired' : p.team || 'unsigned', was: before[id] });
   });
   after.forEach(function (p) {
     if (before[p.id] === 'expiring') sum.resigned.push(p.id);
@@ -2518,9 +2668,11 @@ function quickStart() {
   sum.resigned.sort(byKey(ovr, true)); sum.signed.sort(byKey(ovr, true));
   sum.drafted.sort(byKey(function (id) { return P(id).draft[2]; }));
   S.quickSummary = sum;
-  news('Quick start: the ' + Y + ' offseason ran on autopilot. Week 1 is next.', U);
+  news('Auto-managed offseason: the ' + Y + ' offseason ran for you. Week 1 is next.', U);
   return sum;
 }
+function autoManageOffseason() { return autoOffseason(true); }
+function quickStart() { return autoOffseason(false); }   // old behavior, kept for comparison in tests
 
 // in-season: AI teams replace injured starters with free agents now and then
 function aiInSeason() {
@@ -2536,7 +2688,8 @@ function aiInSeason() {
 }
 function cutdownOne(abbr, avoidPos) {
   var c = roster(abbr).filter(function (p) { return p.pos !== avoidPos && !p.inj; }).sort(byKey(function (p) { return p.ovr + releasePreview(p).now / 1000; }))[0];
-  if (c && space(abbr) + releasePreview(c).savings >= 0) release(c, false);
+  if (c && space(abbr) + releasePreview(c).savings >= 0) { release(c, false); return c.name; }
+  return null;
 }
 
 // ---------- draft ----------
@@ -2740,14 +2893,18 @@ function endOfYear() {
   // career stats; playing time for first-round picks' option tiers (share of games started)
   S.players.forEach(function (p) {
     Object.keys(p.s || {}).forEach(function (k) { p.car[k] = (p.car[k] || 0) + p.s[k]; }); p.last = p.s;
-    if (p.draft && p.draft[1] === 1 && p.draft[0] >= Y - 2) { p.pt = p.pt || {}; p.pt[Y] = Math.round(Math.min(1, (p.s.g || 0) / WEEKS) * 1000) / 1000; }
+    // (real snap shares from the data are kept for the season the game started in)
+    if (p.draft && p.draft[1] === 1 && p.draft[0] >= Y - 2) { p.pt = p.pt || {}; if (p.pt[Y] == null) p.pt[Y] = Math.round(Math.min(1, (p.s.g || 0) / GAMES) * 1000) / 1000; }
+    p.ir = false;
   });
   // fifth-year option salary table for next league year, from this year's cap numbers
   S.optTables = S.optTables || {};
-  S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);
-  var perf = performanceDeltas();
+  if (Y + 1 !== BASE.startYear) S.optTables[Y + 1] = Cap.optionTable(S.players, Y, BASE.optGroup, 1.07);   // the real 2027 table is in the data
+  // 'current' starts: ratings already include this season's real production, so only aging moves them this once
+  var perf = S.startMode === 'current' && BASE.season && Y === BASE.season.year ? {} : performanceDeltas();
   // cap rollover into next league year
-  TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
+  // no rollover out of 2026: the data's 2026 cap space is approximate (missing dead money and rollover)
+  if (!(BASE.season && Y === BASE.season.year)) TEAMS.forEach(function (t) { Cap.rollover(S.players, T(t.abbr), Y); });
   var retired = [];
   S.players.forEach(function (p) {
     if (p.retired) return;
@@ -2914,7 +3071,8 @@ function potInfo(p) {
 function potRange(i) { return i.exact ? '' + i.lo : i.lo + '–' + i.hi; }
 function potText(p) { var i = potInfo(p); return '<span class="pot">POT <b>' + i.grade + '</b> ' + potRange(i) + '</span>'; }
 function devBadge(p) { var t = potInfo(p).trait; return '<span class="dev dev-' + t.toLowerCase() + '">' + t + '</span>'; }
-function capLabel() { return fmtM(capOf(S.year)) + ' cap (projected)'; }
+function capProjected(y) { return !(BASE.season && y === BASE.season.year); }   // the 2026 cap is real; later years are projected
+function capLabel() { return fmtM(capOf(S.year)) + ' cap' + (capProjected(S.year) ? ' (projected)' : ''); }
 function teamLink(a) { return '<span class="tl-team">' + chip(a) + '<b>' + a + '</b></span>'; }
 function recStr(r) { return r.w + '-' + r.l + (r.t ? '-' + r.t : ''); }
 function yrsLeftStr(p) { var n = Cap.yearsLeft(p, S.year); return n ? n + ' yr' : '—'; }
@@ -3077,6 +3235,7 @@ function doContinue() {
 }
 function extraActions() {
   var out = [];
+  if (S.phase === 'resign') out.push(['Auto-manage offseason', 'auto-manage', null, '', 'The AI runs your offseason to week 1']);
   if (S.phase === 'fa') out.push(['Skip to the draft', 'skip-fa', null, '', 'Sims the rest of free agency']);
   if (S.phase === 'draft' && draftLeft()) out.push(['Auto-draft the rest', 'draft-auto', null, '', 'The AI makes your remaining picks']);
   if (S.phase === 'season' && S.week < WEEKS) out.push(['Sim to the playoffs', 'sim-season', null, '', 'Plays every remaining week']);
@@ -3088,28 +3247,29 @@ function extraActions() {
 function renderStart() {
   var has = hasSave();
   var h = '<div class="startpage"><div class="start"><h1 class="logo"><span>Franchise mode</span>Gridiron GM</h1>' +
-    '<p class="lead">Real rosters and contracts (OverTheCap via nflverse). Ratings come from 2024–26 stats and snaps. Your first season is ' + (window.DATA ? DATA.meta.startYear : 2027) + '.</p>' +
+    '<p class="lead">Real rosters, contracts and results (OverTheCap and nflverse). ' + (window.DATA && DATA.meta.season ? '<b class="realwk">Real results through week ' + DATA.meta.season.realWeek + ' of ' + DATA.meta.season.year + '</b>' + (DATA.meta.season.realGames > realThrough() ? ' (plus ' + plural(DATA.meta.season.realGames - realThrough(), 'game') + ' of week ' + (DATA.meta.season.realWeek + 1) + ')' : '') + '. ' : '') + 'Pick a team, then start from this week or from week 1.</p>' +
     '<div class="btns">' + (has ? '<button class="btn pri" data-act="continue-save">Continue saved game</button>' : '') + '<button class="btn" data-act="import">Import save</button></div>' + importInput() +
     '<h2 class="h3">Pick a team</h2><div class="teamgrid">' + TEAMS.slice().sort(byKey(function (t) { return t.name; })).map(function (t) {
       return '<button class="teambtn" style="' + teamVars(t.abbr) + '" data-act="pick-team" data-t="' + t.abbr + '"><b>' + t.abbr + '</b><span>' + esc(t.name) + '</span></button>';
     }).join('') + '</div>' + (has ? '<p class="note">Starting a new game replaces your saved game.</p>' : '') + '</div></div>';
   if (UI.pick) {
-    var t = TEAM[UI.pick], Y = window.DATA ? DATA.meta.startYear : 2027;
+    var t = TEAM[UI.pick], SY = DATA.meta.season.year, RW = DATA.meta.season.realWeek;
     h += '<div class="overlay" data-act="close-bg"><div class="sheet narrow rise" role="dialog" aria-modal="true"><div class="ps-hero slim" style="' + teamVars(UI.pick) + '"><button class="x" data-act="close-pick" aria-label="Close">✕</button><div class="tb big">' + UI.pick + '</div><div class="ps-id"><h2>' + esc(t.name) + '</h2><div class="ps-meta"><span>' + t.conf + ' ' + t.div + '</span><span>OVR ' + startRating(UI.pick) + '</span></div></div></div>' +
       '<div class="ps-body"><div class="modes">' +
-      '<button class="mode' + (UI.mode === 'quick' ? ' on' : '') + '" data-act="mode" data-m="quick"><b>Quick start · Week 1</b><span>The AI runs the ' + Y + ' offseason for every team, yours included: re-signings, fifth-year options, free agency, the draft and cuts to 53 under the cap. You take over at week 1 and get a recap.</span><em>Recommended</em></button>' +
-      '<button class="mode' + (UI.mode === 'full' ? ' on' : '') + '" data-act="mode" data-m="full"><b>Full offseason</b><span>Run the ' + Y + ' offseason yourself, starting in the re-sign window.</span></button></div>' +
+      '<button class="mode' + (UI.mode === 'current' ? ' on' : '') + '" data-act="mode" data-m="current"><b>Continue from this week</b><span>Real ' + SY + ' results through week ' + RW + ': real standings, records and stats to date, current rosters and contracts. The trade deadline has passed; you sim the rest of the season and the playoffs, then run the ' + (SY + 1) + ' offseason.</span><em>Real results through week ' + RW + '</em></button>' +
+      '<button class="mode' + (UI.mode === 'week1' ? ' on' : '') + '" data-act="mode" data-m="week1"><b>Start of ' + SY + ' · Week 1</b><span>Replay ' + SY + ' from week 1 with week-1 rosters and ratings built only from 2024–25 stats, so nothing from ' + SY + ' leaks in. Trades are open until the week-' + TRADE_DEADLINE_WEEK + ' deadline.</span></button></div>' +
       '<p class="seedrow"><label for="seed">Seed</label><input id="seed" inputmode="numeric" placeholder="random" size="10"><span>Optional. The same seed and the same moves replay the same league.</span></p>' +
-      '<div class="btns end"><button class="btn" data-act="close-pick">Back</button><button class="btn pri" data-act="new" data-t="' + UI.pick + '">' + (UI.mode === 'quick' ? 'Start at week 1' : 'Start the offseason') + ' ›</button></div></div></div></div>';
+      '<div class="btns end"><button class="btn" data-act="close-pick">Back</button><button class="btn pri" data-act="new" data-t="' + UI.pick + '">' + (UI.mode === 'week1' ? 'Start at week 1' : 'Start at week ' + (RW + 1)) + ' ›</button></div></div></div></div>';
   }
   $app().innerHTML = h;
 }
-function startRating(abbr) { if (!window.DATA) return ''; var ps = DATA.players.filter(function (p) { return p.team === abbr; }).sort(function (a, b) { return b.ovr - a.ovr; }); return ps.length ? Math.round(ps.slice(0, 22).reduce(function (s, p) { return s + p.ovr; }, 0) / Math.min(22, ps.length)) : ''; }
+function realThrough() { var g = DATA.meta.season.games, w = DATA.meta.season.realWeek; return g.filter(function (x) { return x[0] <= w; }).length; }
+function startRating(abbr) { if (!window.DATA) return ''; var ps = DATA.players.filter(function (p) { return p.t26 === abbr && !p.ir26; }).sort(function (a, b) { return b.ovr - a.ovr; }); return ps.length ? Math.round(ps.slice(0, 22).reduce(function (s, p) { return s + p.ovr; }, 0) / Math.min(22, ps.length)) : ''; }
 function summaryModal() {
   var f = function () {
     var s = S.quickSummary; if (!s) return '';
     var list = function (ids, right) { return ids.length ? ids.map(function (id) { var p = P(id); return '<div class="mini" data-act="player" data-id="' + id + '" role="button" tabindex="0">' + avatar(p, 40, { shield: false }) + '<div class="nm">' + esc(p.name) + '<small>' + p.pos + ' · ' + p.age + ' · ' + right(p) + '</small></div>' + shield(p.ovr, 30) + '</div>'; }).join('') : '<p class="muted">None.</p>'; };
-    var h = '<div class="ps-hero slim" style="' + teamVars(S.user) + '"><button class="x" data-act="close" aria-label="Close">✕</button><div class="ps-id"><h2>Your ' + s.year + ' offseason</h2><div class="ps-meta"><span>Ran on autopilot</span><span>' + roster(S.user).length + ' players</span><span>' + fmtM(fullSpace(S.user)) + ' cap room approx.</span></div></div></div><div class="ps-body recap">';
+    var h = '<div class="ps-hero slim" style="' + teamVars(S.user) + '"><button class="x" data-act="close" aria-label="Close">✕</button><div class="ps-id"><h2>Your ' + s.year + ' offseason</h2><div class="ps-meta"><span>Auto-managed</span><span>' + roster(S.user).length + ' players</span><span>' + fmtM(fullSpace(S.user)) + ' cap room approx.</span></div></div></div><div class="ps-body recap">';
     if (s.options.length) h += '<h3 class="sec">Fifth-year options</h3>' + s.options.map(function (o) { return '<p>' + esc(o.name) + ': <b>' + o.decision + '</b>.</p>'; }).join('');
     h += '<h3 class="sec">Draft picks <small>' + s.drafted.length + '</small></h3>' + list(s.drafted, function (p) { return 'round ' + p.draft[1] + ', pick ' + p.draft[2] + ' · ' + numStr(p); });
     h += '<h3 class="sec">Signed <small>' + (s.resigned.length + s.signed.length) + '</small></h3>' + list(s.resigned.concat(s.signed), function (p) { return (s.resigned.indexOf(p.id) >= 0 ? 're-signed · ' : '') + fmtM(Cap.capHit(p, S.year)) + ' · ' + yrsLeftStr(p); });
@@ -3121,16 +3281,27 @@ function summaryModal() {
   f.kind = 'dialog';
   return f;
 }
+// Two starts: the real 2026 season at the current week (data.json), or 2026 from week 1 (data_w1.json,
+// fetched only when chosen: week-1 rosters and ratings from 2024-25 stats).
 function startGame(abbr, mode) {
-  var sd = document.getElementById('seed');
-  newGame(DATA, abbr, sd ? sd.value.trim() : null); reindex();
-  UI.view = 'hub'; UI.trade = null; UI._preview = null; UI.pick = null; UI.last = {};
-  if (mode === 'quick') {
-    $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Quick start</span>Simulating the offseason</h1><p class="lead">Re-signings, free agency, the draft and cuts to 53 for all 32 teams…</p></div></div>';
-    setTimeout(function () { quickStart(); openModal(summaryModal()); render(); }, 30);
-    return true;
-  }
-  return false;
+  var sd = document.getElementById('seed'), seed = sd ? sd.value.trim() : null;
+  var go = function (data) { newGame(data, abbr, seed, mode); reindex(); UI.view = 'hub'; UI.trade = null; UI._preview = null; UI.pick = null; UI.last = {}; render(); };
+  if (mode !== 'week1') { go(DATA); return true; }
+  $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Start of ' + DATA.meta.season.year + '</span>Loading week-1 rosters</h1><p class="lead">Week-1 rosters and ratings from 2024–25 stats…</p></div></div>';
+  fetch('data_w1.json').then(function (r) { return r.json(); }).then(go).catch(function () { UI.pick = null; renderStart(); alert('Could not load the week-1 data. Check your connection and try again.'); });
+  return true;
+}
+// Auto-manage offseason: the AI runs your offseason (re-signing your best expiring players first) to week 1.
+function autoManageDialog() {
+  var f = function () {
+    var exp = expiring();
+    return '<div class="confirm-in"><h3>Auto-manage the ' + S.year + ' offseason?</h3><p class="muted">The AI runs your offseason to week 1, then shows a recap.</p><ul class="issues plain">' +
+      '<li><b>First, re-signings:</b> your expiring starters and anyone rated 75+ under 31, best first, at their asking price, as long as you stay under the cap with room to fill 53. Good young starters are worth restructuring for (no cuts).' + (exp.length ? ' Up for a new deal: ' + exp.slice(0, 3).map(function (p) { return esc(p.name) + ' (' + p.ovr + ')'; }).join(', ') + '.' : '') + '</li>' +
+      '<li><b>Fifth-year options</b>, then <b>free agency</b>, <b>the draft</b> and <b>final cuts to 53</b> under the cap.</li></ul>' +
+      '<div class="btns end"><button class="btn" data-act="close">Not now</button><button class="btn pri" data-act="auto-manage-go">Auto-manage to week 1 ›</button></div></div>';
+  };
+  f.kind = 'dialog';
+  return f;
 }
 
 // ---------- events ----------
@@ -3143,7 +3314,7 @@ function onClick(e) {
   if (a !== 'menu') UI.menu = null;
   var r;
   switch (a) {
-    case 'pick-team': UI.pick = d.t; UI.mode = 'quick'; renderStart(); return;
+    case 'pick-team': UI.pick = d.t; UI.mode = 'current'; renderStart(); return;
     case 'mode': UI.mode = d.m; var sv = document.getElementById('seed') ? document.getElementById('seed').value : ''; renderStart(); if (document.getElementById('seed')) document.getElementById('seed').value = sv; return;
     case 'close-pick': UI.pick = null; renderStart(); return;
     case 'new':
@@ -3223,6 +3394,12 @@ function onClick(e) {
       if (d.back === 'confirm') openModal(confirmDialog()); else { UI.modal = playerModal(d.id); UI.modal.kind = 'slide'; }
       break;
     case 'recap': if (S.quickSummary) openModal(summaryModal()); break;
+    case 'auto-manage': if (S.phase === 'resign') openModal(autoManageDialog()); break;
+    case 'auto-manage-go':
+      UI.modal = null;
+      $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Auto-manage</span>Running the ' + S.year + ' offseason</h1><p class="lead">Re-signings first, then free agency, the draft and final cuts to 53…</p></div></div>';
+      setTimeout(function () { autoManageOffseason(); UI.view = 'hub'; openModal(summaryModal()); render(); }, 30);
+      return;
     case 'export': exportSave(); return;
     case 'import': document.getElementById('importfile').click(); return;
     case 'draft-auto': draftUntilUser(true); UI.view = 'draft'; flash('Draft complete. Rookies are signed to slotted contracts. Continue runs final cuts and starts week 1.'); break;
@@ -3367,6 +3544,7 @@ function divRank() {
 function newsList(items) {
   return items.length ? '<ul class="newsl">' + items.map(function (n) { return '<li><span class="when">' + n.y + ' ' + PHASE_LABEL[n.ph] + (n.ph === 'season' ? ' · wk ' + n.w : '') + '</span>' + esc(n.msg) + '</li>'; }).join('') + '</ul>' : '<p class="muted">Nothing yet.</p>';
 }
+function teamPlayers(abbr) { return roster(abbr).concat(reserve(abbr)); }
 function nextGameOf() { return S.phase === 'season' && S.week < WEEKS ? S.schedule[S.week].filter(function (g) { return g.h === S.user || g.a === S.user; })[0] : null; }
 
 // ---------- Home ----------
@@ -3402,7 +3580,7 @@ function nextStep(exp, nextGame) {
   if (S.phase === 'season' && n < ROSTER_MAX)
     return { bad: !!rf.short, big: n + '<small>of ' + ROSTER_MAX + '</small>', title: 'Fill your roster to ' + ROSTER_MAX, sub: n + ' players now.' + (rf.short ? ' You need ' + fmtM(rf.short) + ' more room.' : ''), btn: rf.short ? btn('make-room', 'Make room') : btn('auto-roster', 'Auto-fill') };
   switch (S.phase) {
-    case 'resign': return { big: exp.length + '<small>expiring</small>', title: 'Re-sign your expiring players', sub: exp.length + ' contracts expired. Anyone you don\'t re-sign hits free agency.', btn: btn('view', 'Review', ' data-v="resign"') };
+    case 'resign': return { big: exp.length + '<small>expiring</small>', title: 'Re-sign your expiring players', sub: exp.length + ' contracts expired. Anyone you don\'t re-sign hits free agency. Or let the AI run your whole offseason to week 1.', btn: btn('view', 'Review', ' data-v="resign"') + '<button class="btn" data-act="auto-manage">Auto-manage offseason</button>' };
     case 'fa': return { big: 'Day ' + (S.faDay + 1) + '<small>of ' + FA_DAYS + '</small>', title: 'Free agency is open', sub: 'Asks drop each day, but other teams sign players too. ' + fmtM(space(S.user)) + ' of room.', btn: btn('view', 'Browse free agents', ' data-v="fa"') };
     case 'draft':
       if (!draftLeft()) return { big: roster(S.user).length + '<small>on the roster</small>', title: 'Draft complete', sub: 'Continue runs final cuts to ' + ROSTER_MAX + ' for every team and starts week 1. You only stop if your roster can\'t get there under the cap.', btn: btn('view', 'See your picks', ' data-v="draft"') };
@@ -3467,6 +3645,8 @@ VIEWS.roster = function () {
     if (g[0]) h += '<div class="grp"><h3>' + g[0] + '</h3><span>' + g[1].length + ' · ' + fmtM(sumBy(g[1], function (p) { return Cap.capHit(p, S.year); })) + '</span></div>';
     h += '<div class="cards">' + g[1].map(function (p) { return pcard(p, { slot: slots[p.id] }); }).join('') + '</div>';
   });
+  var ir = reserve(S.user).filter(function (p) { return inGroup(p, UI.rgroup); });
+  if (ir.length) h += '<div class="grp"><h3>Injured reserve</h3><span>' + ir.length + ' · off the 53, still on the cap</span></div><div class="cards">' + ir.map(function (p) { return pcard(p); }).join('') + '</div>';
   return h;
 };
 
@@ -3495,25 +3675,25 @@ VIEWS.cap = function () {
   var team = T(S.user), years = [0, 1, 2, 3, 4].map(function (i) { return S.year + i; }), sp = space(S.user), rf = rosterFill(S.user);
   var h = titleRow('Team', segs(TEAM_SCREENS, 'cap'), capLabel());
   h += '<section class="panel pad" style="margin-bottom:14px"><div class="ps-row caprow">' +
-    '<div class="stat"><span>League cap (projected)</span><b>' + fmtM(capOf(S.year)) + '</b></div><div class="stat"><span>Contracts' + (top51(S.year) ? ' (top 51)' : '') + '</span><b>' + fmtM(committed(S.user)) + '</b></div>' +
+    '<div class="stat"><span>League cap' + (capProjected(S.year) ? ' (projected)' : '') + '</span><b>' + fmtM(capOf(S.year)) + '</b></div><div class="stat"><span>Contracts' + (top51(S.year) ? ' (top 51)' : '') + '</span><b>' + fmtM(committed(S.user)) + '</b></div>' +
     '<div class="stat"><span>Dead money</span><b class="' + (Cap.teamDead(team, S.year) ? 'neg' : '') + '">' + fmtM(Cap.teamDead(team, S.year)) + '</b></div><div class="stat"><span>Cap space (approx.)</span><b class="' + (sp < 0 ? 'neg' : 'good') + '">' + fmtM(sp) + '</b></div>' +
     '<div class="stat"><span>Room needed to fill ' + ROSTER_MAX + '</span><b class="' + (rf.short ? 'neg' : '') + '">' + fmtM(rf.need) + '</b></div></div>' + capBar() + '</section>';
   h += '<section class="panel tablewrap" style="margin-bottom:14px"><table class="dense"><thead><tr><th></th>' + years.map(function (y, i) { return '<th class="r' + (i > 2 ? ' hide-sm' : '') + '">' + y + '</th>'; }).join('') + '</tr></thead><tbody>';
   var row = function (label, f, cls) { return '<tr class="' + (cls || '') + '"><td>' + label + '</td>' + years.map(function (y, i) { return '<td class="r' + (i > 2 ? ' hide-sm' : '') + '">' + f(y) + '</td>'; }).join('') + '</tr>'; };
-  h += row('League cap (projected)', function (y) { return fmtM(capOf(y)); });
+  h += row('League cap', function (y) { return fmtM(capOf(y)) + (capProjected(y) ? ' <span class="muted small">proj.</span>' : ''); });
   h += row('Rollover', function (y) { return fmtM((team.rollover || {})[y] || 0); });
   h += row('Active contracts', function (y) { return fmtM(committed(S.user, y)) + (top51(y) ? ' <span class="muted small">top 51</span>' : ''); });
   h += row('Dead money', function (y) { return fmtM(Cap.teamDead(team, y)); });
   h += row('Cap space (approx.)', function (y) { var s = space(S.user, y); return '<b class="' + (s < 0 ? 'bad' : '') + '">' + fmtM(s) + '</b>'; }, 'total');
   h += row('Room needed to fill ' + ROSTER_MAX, function (y) { return y === S.year ? '<span class="' + (rf.short ? 'bad' : '') + '">' + fmtM(rf.need) + '</span>' : ''; });
-  h += row('Players under contract', function (y) { return roster(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
+  h += row('Players under contract', function (y) { return teamPlayers(S.user).filter(function (p) { var r = Cap.row(p, y); return r && !r.void; }).length; });
   h += '</tbody></table></section><h3 class="sec">Contracts</h3><section class="panel tablewrap"><table class="dense"><thead><tr><th></th><th>Player</th><th class="hide-sm">Pos</th>' + years.map(function (y, i) { return '<th class="r' + (i > 2 ? ' hide-sm' : '') + '">' + y + '</th>'; }).join('') + '<th class="r hide-sm">Gtd left</th></tr></thead><tbody>';
-  roster(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
-    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td>' + avatar(p, 30, { shield: false }) + '</td><td><span class="pn">' + esc(p.name) + '</span></td><td class="hide-sm">' + p.pos + '</td>' + years.map(function (y, i) {
+  teamPlayers(S.user).sort(byKey(function (p) { return Cap.capHit(p, S.year); }, true)).forEach(function (p) {
+    h += '<tr class="click" data-act="player" data-id="' + p.id + '"><td>' + avatar(p, 30, { shield: false }) + '</td><td><span class="pn">' + esc(p.name) + '</span>' + (p.ir ? ' <span class="inj">IR</span>' : '') + '</td><td class="hide-sm">' + p.pos + '</td>' + years.map(function (y, i) {
       var r = Cap.row(p, y); return '<td class="r' + (r && r.void ? ' muted' : '') + (i > 2 ? ' hide-sm' : '') + '">' + (r ? fmtM(r.cap) + (r.void ? ' void' : '') : '') + '</td>';
     }).join('') + '<td class="r hide-sm">' + fmtM(Cap.gtdLeft(p, S.year)) + '</td></tr>';
   });
-  return h + '</tbody></table></section><p class="note">League cap ' + fmtM(capOf(S.year)) + ' for ' + S.year + ' is projected; later years assume ~7% growth. Cap space is approximate: it counts every contract on the roster, this game\'s dead money and rollover, but not dead money from cuts made before the game started. Until week 1 only the 51 largest cap numbers count (the top-51 rule); from week 1 every contract counts. Future years are shown under the top-51 rule.</p>';
+  return h + '</tbody></table></section><p class="note">League cap ' + fmtM(capOf(S.year)) + ' for ' + S.year + (capProjected(S.year) ? ' is projected' : ' is the real figure') + '; later years are projected at ~7% growth. Cap space is approximate: it counts every contract on the roster, this game\'s dead money and rollover, but not dead money from cuts made before the game started. Until week 1 only the 51 largest cap numbers count (the top-51 rule); from week 1 every contract counts. Future years are shown under the top-51 rule.</p>';
 };
 
 // Player card: slides over from the right (full screen on phone). Overview / Stats / Contract tabs,
@@ -3636,7 +3816,7 @@ VIEWS.moves = function () {
     var n = '', small = '', p = '';
     if (v === 'resign') { var exp = expiring(); n = exp.length; small = 'expiring'; p = exp.length ? 'Keep your expiring players before free agency opens. Top ask: ' + esc(exp[0].name) + ' at ' + fmtM(askOf(exp[0]).apy) + '/yr.' : 'Nobody left to re-sign.'; }
     if (v === 'fa') { var pool = freeAgents(); n = pool.filter(function (x) { return x.ovr >= 75; }).length; small = 'rated 75+'; p = S.phase === 'fa' ? 'Day ' + (S.faDay + 1) + ' of ' + FA_DAYS + '. Asks drop each day, but other teams sign players too.' : 'Unsigned players, available all season.'; }
-    if (v === 'trade') { var picks = picksOf(S.user).filter(function (k) { return k.year === S.year; }); n = picks.length; small = S.year + ' picks'; p = S.phase === 'season' ? 'Deadline after week ' + TRADE_DEADLINE_WEEK + '.' : 'Open until the week-' + TRADE_DEADLINE_WEEK + ' deadline.'; }
+    if (v === 'trade') { var py = S.phase === 'season' || S.phase === 'playoffs' ? S.year + 1 : S.year, picks = picksOf(S.user).filter(function (k) { return k.year === py; }); n = picks.length; small = py + ' picks'; p = S.phase === 'season' ? 'Deadline after week ' + TRADE_DEADLINE_WEEK + '.' : 'Open until the week-' + TRADE_DEADLINE_WEEK + ' deadline.'; }
     if (v === 'draft') { var k = currentPick(); n = k ? '#' + k.no : '✓'; small = k ? 'on the clock' : 'complete'; p = 'Your picks: ' + (picksOf(S.user).filter(function (x) { return x.year === S.year; }).map(function (x) { return '#' + x.no; }).join(', ') || 'none left') + '.'; }
     if (v === 'cuts') { n = roster(S.user).length; small = 'of ' + ROSTER_MAX; p = 'Final cuts got stuck: make room, then press Continue.'; }
     return '<button class="movetile" data-act="view" data-v="' + v + '"><div class="n">' + n + '<small>' + small + '</small></div><h3>' + SCREEN_LABEL[v] + '</h3><p>' + p + '</p><div class="go">Open ›</div></button>';

@@ -45,15 +45,6 @@
 "share": 0.07968
 },
 {
-"id": "00-0023459",
-"name": "Aaron Rodgers",
-"pos": "QB",
-"years": 1,
-"total": 22.5,
-"gtd": 22.0,
-"share": 0.0747
-},
-{
 "id": "00-0038128",
 "name": "Malik Willis",
 "pos": "QB",
@@ -495,21 +486,21 @@
 "share": 0.02988
 },
 {
-"id": "00-0037083",
-"name": "Kingsley Enagbare",
-"pos": "EDGE",
-"years": 1,
-"total": 9.0,
-"gtd": 8.49,
-"share": 0.02988
-},
-{
 "id": "00-0034163",
 "name": "Jacob Martin",
 "pos": "EDGE",
 "years": 1,
 "total": 9.0,
 "gtd": 4.5,
+"share": 0.02988
+},
+{
+"id": "00-0037083",
+"name": "Kingsley Enagbare",
+"pos": "EDGE",
+"years": 1,
+"total": 9.0,
+"gtd": 8.49,
 "share": 0.02988
 },
 {
@@ -567,21 +558,21 @@
 "share": 0.02689
 },
 {
-"id": "00-0036997",
-"name": "Javonte Williams",
-"pos": "RB",
-"years": 3,
-"total": 24.0,
-"gtd": 16.0,
-"share": 0.02656
-},
-{
 "id": "00-0036158",
 "name": "J.K. Dobbins",
 "pos": "RB",
 "years": 2,
 "total": 16.0,
 "gtd": 0.0,
+"share": 0.02656
+},
+{
+"id": "00-0036997",
+"name": "Javonte Williams",
+"pos": "RB",
+"years": 3,
+"total": 24.0,
+"gtd": 16.0,
 "share": 0.02656
 },
 {
@@ -756,21 +747,21 @@
 "share": 0.02158
 },
 {
-"id": "00-0037263",
-"name": "Tyler Allgeier",
-"pos": "RB",
-"years": 2,
-"total": 12.25,
-"gtd": 8.0,
-"share": 0.02034
-},
-{
 "id": "00-0036139",
 "name": "Rico Dowdle",
 "pos": "RB",
 "years": 2,
 "total": 12.25,
 "gtd": 5.0,
+"share": 0.02034
+},
+{
+"id": "00-0037263",
+"name": "Tyler Allgeier",
+"pos": "RB",
+"years": 2,
+"total": 12.25,
+"gtd": 8.0,
 "share": 0.02034
 },
 {
@@ -900,15 +891,6 @@
 "share": 0.0166
 },
 {
-"id": "00-0035662",
-"name": "Marquise Brown",
-"pos": "WR",
-"years": 1,
-"total": 5.0,
-"gtd": 5.0,
-"share": 0.0166
-},
-{
 "id": "00-0037081",
 "name": "Braxton Jones",
 "pos": "OT",
@@ -918,21 +900,21 @@
 "share": 0.0166
 },
 {
-"id": "00-0035688",
-"name": "Trey Pipkins",
-"pos": "OT",
-"years": 2,
-"total": 10.0,
-"gtd": 4.575,
-"share": 0.0166
-},
-{
 "id": "00-0036905",
 "name": "Larry Borom",
 "pos": "OT",
 "years": 1,
 "total": 5.0,
 "gtd": 4.9,
+"share": 0.0166
+},
+{
+"id": "00-0035688",
+"name": "Trey Pipkins",
+"pos": "OT",
+"years": 2,
+"total": 10.0,
+"gtd": 4.575,
 "share": 0.0166
 },
 {
@@ -954,21 +936,21 @@
 "share": 0.0166
 },
 {
-"id": "00-0036625",
-"name": "Benjamin St-Juste",
-"pos": "CB",
-"years": 2,
-"total": 10.0,
-"gtd": 3.0,
-"share": 0.0166
-},
-{
 "id": "00-0033548",
 "name": "Chidobe Awuzie",
 "pos": "CB",
 "years": 1,
 "total": 5.0,
 "gtd": 5.0,
+"share": 0.0166
+},
+{
+"id": "00-0036625",
+"name": "Benjamin St-Juste",
+"pos": "CB",
+"years": 2,
+"total": 10.0,
+"gtd": 3.0,
 "share": 0.0166
 },
 {
@@ -988,15 +970,6 @@
 "total": 9.25,
 "gtd": 5.75,
 "share": 0.01536
-},
-{
-"id": "00-0025565",
-"name": "Nick Folk",
-"pos": "K",
-"years": 2,
-"total": 9.0,
-"gtd": 4.0,
-"share": 0.01494
 },
 {
 "id": "00-0035644",
@@ -1053,21 +1026,21 @@
 "share": 0.01328
 },
 {
-"id": "00-0037196",
-"name": "Rasheed Walker",
-"pos": "OT",
-"years": 1,
-"total": 4.0,
-"gtd": 3.215,
-"share": 0.01328
-},
-{
 "id": "00-0036363",
 "name": "Josh Jones",
 "pos": "OT",
 "years": 1,
 "total": 4.0,
 "gtd": 3.0,
+"share": 0.01328
+},
+{
+"id": "00-0037196",
+"name": "Rasheed Walker",
+"pos": "OT",
+"years": 1,
+"total": 4.0,
+"gtd": 3.215,
 "share": 0.01328
 },
 {
@@ -1107,15 +1080,6 @@
 "share": 0.01328
 },
 {
-"id": "00-0038043",
-"name": "Joshua Williams",
-"pos": "CB",
-"years": 2,
-"total": 8.0,
-"gtd": 3.24,
-"share": 0.01328
-},
-{
 "id": "00-0036617",
 "name": "Asante Samuel Jr.",
 "pos": "CB",
@@ -1134,12 +1098,12 @@
 "share": 0.01328
 },
 {
-"id": "00-0035227",
-"name": "P.J. Locke",
-"pos": "S",
-"years": 1,
-"total": 4.0,
-"gtd": 3.5,
+"id": "00-0038043",
+"name": "Joshua Williams",
+"pos": "CB",
+"years": 2,
+"total": 8.0,
+"gtd": 3.24,
 "share": 0.01328
 },
 {
@@ -1149,6 +1113,15 @@
 "years": 1,
 "total": 4.0,
 "gtd": 2.0,
+"share": 0.01328
+},
+{
+"id": "00-0035227",
+"name": "P.J. Locke",
+"pos": "S",
+"years": 1,
+"total": 4.0,
+"gtd": 3.5,
 "share": 0.01328
 },
 {
@@ -1170,12 +1143,12 @@
 "share": 0.01245
 },
 {
-"id": "00-0037259",
-"name": "Micah McFadden",
+"id": "00-0037271",
+"name": "D'Marco Jackson",
 "pos": "LB",
-"years": 1,
-"total": 3.75,
-"gtd": 2.9,
+"years": 2,
+"total": 7.5,
+"gtd": 3.625,
 "share": 0.01245
 },
 {
@@ -1188,12 +1161,12 @@
 "share": 0.01245
 },
 {
-"id": "00-0037271",
-"name": "D'Marco Jackson",
+"id": "00-0037259",
+"name": "Micah McFadden",
 "pos": "LB",
-"years": 2,
-"total": 7.5,
-"gtd": 3.625,
+"years": 1,
+"total": 3.75,
+"gtd": 2.9,
 "share": 0.01245
 },
 {
@@ -1278,6 +1251,15 @@
 "share": 0.01102
 },
 {
+"id": "00-0030279",
+"name": "Keenan Allen",
+"pos": "WR",
+"years": 1,
+"total": 3.32,
+"gtd": 2.81,
+"share": 0.01102
+},
+{
 "id": "00-0037829",
 "name": "Spencer Burford",
 "pos": "IOL",
@@ -1321,6 +1303,15 @@
 "total": 6.5,
 "gtd": 3.15,
 "share": 0.01079
+},
+{
+"id": "00-0038095",
+"name": "Cordell Volson",
+"pos": "IOL",
+"years": 1,
+"total": 3.215,
+"gtd": 2.0,
+"share": 0.01067
 },
 {
 "id": "00-0035637",
@@ -1386,21 +1377,21 @@
 "share": 0.00996
 },
 {
-"id": "00-0034798",
-"name": "Durham Smythe",
-"pos": "TE",
-"years": 1,
-"total": 3.0,
-"gtd": 2.0,
-"share": 0.00996
-},
-{
 "id": "00-0033110",
 "name": "Tyler Higbee",
 "pos": "TE",
 "years": 2,
 "total": 6.0,
 "gtd": 4.0,
+"share": 0.00996
+},
+{
+"id": "00-0034798",
+"name": "Durham Smythe",
+"pos": "TE",
+"years": 1,
+"total": 3.0,
+"gtd": 2.0,
 "share": 0.00996
 },
 {
@@ -1413,21 +1404,21 @@
 "share": 0.00996
 },
 {
-"id": "00-0034371",
-"name": "Da'Shawn Hand",
-"pos": "EDGE",
-"years": 1,
-"total": 3.0,
-"gtd": 1.5,
-"share": 0.00996
-},
-{
 "id": "00-0036335",
 "name": "D.J. Wonnum",
 "pos": "EDGE",
 "years": 1,
 "total": 3.0,
 "gtd": 2.27,
+"share": 0.00996
+},
+{
+"id": "00-0034371",
+"name": "Da'Shawn Hand",
+"pos": "EDGE",
+"years": 1,
+"total": 3.0,
+"gtd": 1.5,
 "share": 0.00996
 },
 {
@@ -1512,21 +1503,21 @@
 "share": 0.00913
 },
 {
-"id": "00-0036215",
-"name": "Danny Pinter",
-"pos": "IOL",
-"years": 1,
-"total": 2.75,
-"gtd": 1.5,
-"share": 0.00913
-},
-{
 "id": "00-0037814",
 "name": "Luke Fortner",
 "pos": "IOL",
 "years": 1,
 "total": 2.75,
 "gtd": 1.325,
+"share": 0.00913
+},
+{
+"id": "00-0036215",
+"name": "Danny Pinter",
+"pos": "IOL",
+"years": 1,
+"total": 2.75,
+"gtd": 1.5,
 "share": 0.00913
 },
 {
@@ -1554,15 +1545,6 @@
 "years": 1,
 "total": 2.75,
 "gtd": 2.7,
-"share": 0.00913
-},
-{
-"id": "00-0037823",
-"name": "Christian Harris",
-"pos": "LB",
-"years": 1,
-"total": 2.75,
-"gtd": 1.985,
 "share": 0.00913
 },
 {
@@ -1602,15 +1584,6 @@
 "share": 0.00842
 },
 {
-"id": "00-0035993",
-"name": "Tyler Huntley",
-"pos": "QB",
-"years": 2,
-"total": 5.0,
-"gtd": 3.5,
-"share": 0.0083
-},
-{
 "id": "00-0037077",
 "name": "Sam Howell",
 "pos": "QB",
@@ -1626,6 +1599,15 @@
 "years": 1,
 "total": 2.5,
 "gtd": 2.0,
+"share": 0.0083
+},
+{
+"id": "00-0035993",
+"name": "Tyler Huntley",
+"pos": "QB",
+"years": 2,
+"total": 5.0,
+"gtd": 3.5,
 "share": 0.0083
 },
 {
@@ -1665,6 +1647,15 @@
 "share": 0.0083
 },
 {
+"id": "00-0035413",
+"name": "Luke Gifford",
+"pos": "LB",
+"years": 2,
+"total": 5.0,
+"gtd": 2.01,
+"share": 0.0083
+},
+{
 "id": "00-0035286",
 "name": "Cole Holcomb",
 "pos": "LB",
@@ -1674,12 +1665,12 @@
 "share": 0.0083
 },
 {
-"id": "00-0035413",
-"name": "Luke Gifford",
-"pos": "LB",
-"years": 2,
-"total": 5.0,
-"gtd": 2.01,
+"id": "00-0036941",
+"name": "Andre Cisco",
+"pos": "S",
+"years": 1,
+"total": 2.5,
+"gtd": 1.25,
 "share": 0.0083
 },
 {
@@ -1836,21 +1827,21 @@
 "share": 0.00664
 },
 {
-"id": "00-0036590",
-"name": "Quintin Morris",
-"pos": "TE",
-"years": 1,
-"total": 2.0,
-"gtd": 1.7,
-"share": 0.00664
-},
-{
 "id": "00-0037086",
 "name": "Grant Calcaterra",
 "pos": "TE",
 "years": 1,
 "total": 2.0,
 "gtd": 0.7,
+"share": 0.00664
+},
+{
+"id": "00-0036590",
+"name": "Quintin Morris",
+"pos": "TE",
+"years": 1,
+"total": 2.0,
+"gtd": 1.7,
 "share": 0.00664
 },
 {
@@ -1899,6 +1890,15 @@
 "share": 0.00664
 },
 {
+"id": "00-0035857",
+"name": "Chris Williams",
+"pos": "DL",
+"years": 1,
+"total": 2.0,
+"gtd": 0.5,
+"share": 0.00664
+},
+{
 "id": "00-0036867",
 "name": "Chris Rumph II",
 "pos": "EDGE",
@@ -1917,21 +1917,21 @@
 "share": 0.00664
 },
 {
-"id": "00-0037320",
-"name": "Deane Leonard",
-"pos": "CB",
-"years": 1,
-"total": 2.0,
-"gtd": 1.215,
-"share": 0.00664
-},
-{
 "id": "00-0032580",
 "name": "Jonathan Jones",
 "pos": "CB",
 "years": 1,
 "total": 2.0,
 "gtd": 2.0,
+"share": 0.00664
+},
+{
+"id": "00-0037320",
+"name": "Deane Leonard",
+"pos": "CB",
+"years": 1,
+"total": 2.0,
+"gtd": 1.215,
 "share": 0.00664
 },
 {

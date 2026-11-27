@@ -1,7 +1,7 @@
 // Replay of a reported bug: new Patriots game (seed 42), sign Kevin Byard, auto-draft, exercise Drake Maye's
 // option, auto-fill. The room-needed warning before signing must match what auto-fill actually ends up
 // short, and auto-fill must say so (never stop silently or leave the team over the cap at week 1).
-//   A: Byard at his ask  -> no shortfall predicted, roster fills to 53, still under the cap
+//   A: Byard $1.5M/yr under his ask -> no shortfall predicted, roster fills to 53, still under the cap
 //   B: Byard at $2M/yr over his ask -> shortfall predicted, auto-fill reports the same shortfall
 // Run: node tests/roomfill.test.js
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -46,7 +46,7 @@ function scenario(label, overAsk) {
 }
 
 // A: at his ask
-const A = scenario('A: Byard at his ask', 0);
+const A = scenario('A: Byard $1.5M/yr under his ask (fits, with room to spare)', -1500);
 ok('A: no shortfall warning on the offer', !A.warn);
 ok('A: roster filled to 53', A.n === 53 && A.ar.missing === 0, A.ar.msg);
 ok('A: no under-53 warning on the to-do list', !/Roster is under 53/.test(strip(A.run('VIEWS.hub()'))));

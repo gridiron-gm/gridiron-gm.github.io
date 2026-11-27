@@ -875,3 +875,6 @@ table.dense td:first-child:has(> .avw), table.dense td:first-child:has(> .shield
 .qs > span > .lbl-l { display: inline; font: inherit; letter-spacing: inherit; color: inherit; }
 .qs > span > .lbl-s { display: none; font: inherit; letter-spacing: inherit; color: inherit; }
 @media (max-width: 760px) { .qs > span > .lbl-l { display: none; } .qs > span > .lbl-s { display: inline; } }
+
+.realwk { color: #fff; }
+.issues.plain li::before { content: '›'; background: var(--tc2b); color: #fff; }

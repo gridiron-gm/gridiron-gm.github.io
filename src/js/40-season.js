@@ -1,8 +1,10 @@
 // Schedule, game sim from team strength, injuries, stats, standings, playoffs.
-var WEEKS = 17;
+var WEEKS = 18;          // 17 games and one bye per team
+var GAMES = 17;
 
 function makeSchedule() {
-  // 17 rounds, each a perfect matching of all 32 teams: 6 division rounds + 11 non-division rounds.
+  // 18 weeks: 6 division rounds + 12 non-division rounds. Eight of the non-division rounds give 4 teams a bye
+  // (every team gets exactly one), so each team plays 17 games.
   var abbrs = TEAMS.map(function (t) { return t.abbr; });
   var divs = {};
   TEAMS.forEach(function (t) { (divs[t.conf + t.div] = divs[t.conf + t.div] || []).push(t.abbr); });
@@ -23,9 +25,13 @@ function makeSchedule() {
   function sameDiv(a, b) { return TEAM[a].conf === TEAM[b].conf && TEAM[a].div === TEAM[b].div; }
   var homeCount = {};
   abbrs.forEach(function (a) { homeCount[a] = 3; });
-  for (var r = 0; r < 11; r++) {
-    for (var attempt = 0; attempt < 400; attempt++) {
-      var left = RNG.shuffle(abbrs.slice()), games = [], okRound = true;
+  var byeGroups = [], sh = RNG.shuffle(abbrs.slice());
+  for (var bg = 0; bg < 8; bg++) byeGroups.push(sh.slice(bg * 4, bg * 4 + 4));
+  var BYE_ROUND = { 3: 0, 4: 1, 5: 2, 6: 3, 7: 4, 8: 5, 9: 6, 10: 7 };   // non-division round -> bye group
+  for (var r = 0; r < 12; r++) {
+    var bye = BYE_ROUND[r] != null ? byeGroups[BYE_ROUND[r]] : [];
+    for (var attempt = 0; attempt < 600; attempt++) {
+      var left = RNG.shuffle(abbrs.filter(function (a) { return bye.indexOf(a) < 0; })), games = [], okRound = true;
       while (left.length) {
         var a = left.shift();
         var idx = -1;
@@ -42,8 +48,8 @@ function makeSchedule() {
       }
     }
   }
-  // interleave: spread division games across the season
-  var order = [6, 0, 7, 8, 1, 9, 10, 2, 11, 12, 13, 3, 14, 15, 4, 16, 5];
+  // interleave: spread division games across the season (rounds 0-5 division, 6-17 non-division; byes mid-season)
+  var order = [6, 0, 7, 8, 1, 9, 10, 2, 11, 12, 13, 3, 14, 15, 16, 4, 17, 5];
   S.schedule = order.filter(function (i) { return rounds[i]; }).map(function (i) { return rounds[i].map(function (g) { return { h: g.h, a: g.a, hs: null, as: null }; }); });
 }
 
@@ -129,6 +135,14 @@ function injuries(abbr) {
     }
   });
 }
+// injured-reserve players whose time is up rejoin the 53; a full team releases its weakest player for him
+function returnFromReserve() {
+  S.players.forEach(function (p) {
+    if (!p.ir || p.inj || !p.team) return;
+    p.ir = false; p.injNote = null;
+    if (roster(p.team).length > ROSTER_MAX) { var cut = cutdownOne(p.team, p.pos); if (p.team === S.user) news(p.name + ' returned from injured reserve' + (cut ? '; ' + cut + ' was released to make room.' : '.'), p.team); }
+  });
+}
 function healInjuries() { S.players.forEach(function (p) { if (p.inj && p.inj < 99) { p.inj--; if (!p.inj) p.injNote = null; } }); }
 
 function record(home, away, hs, as) {
@@ -146,11 +160,13 @@ function simWeek() {
   if (S.week === 0) S.players.forEach(function (p) { if (p.team) Cap.exerciseOptions(p, S.year); });
   Object.keys(S.teams).forEach(function (a) { if (a !== S.user) autoDepth(a); });
   S.schedule[S.week].forEach(function (g) {
+    if (g.hs != null) return;                 // already played for real
     var r = simGame(g.h, g.a);
     g.hs = r.hs; g.as = r.as;
     record(g.h, g.a, r.hs, r.as);
   });
   healInjuries();
+  returnFromReserve();
   S.week++;
   return true;
 }

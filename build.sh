@@ -33,5 +33,6 @@ HEAD
   echo '</html>'
 } > "$OUT"
 cp src/data.json docs/data.json
+cp src/data_w1.json docs/data_w1.json
 touch docs/.nojekyll
 echo "built $OUT ($(wc -c < "$OUT" | tr -d ' ') bytes) + docs/data.json"

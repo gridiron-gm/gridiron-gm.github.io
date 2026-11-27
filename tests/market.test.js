@@ -28,7 +28,10 @@ ok('repeated lowballs lower mood', Market.evaluate(doubs, offerAt(doubs, 1), ctx
 ok('stable reaction (same inputs -> same answer)', Market.evaluate(doubs, offerAt(doubs, 1), ctx()).accept === Market.evaluate(doubs, offerAt(doubs, 1), ctx()).accept);
 
 const maye = find('Drake Maye'), mahomes = find('Patrick Mahomes');
-ok('Maye on rookie deal > Mahomes on $90M cap hit', Market.playerTradeValue(maye, Y, cap) > Market.playerTradeValue(mahomes, Y, cap));
+// the same player is worth more on a rookie deal than on a $90M cap hit (was "Maye > Mahomes", but which of two
+// real stars rates higher moves with each data refresh; the principle is what matters)
+const mayeOnBigDeal = Object.assign({}, maye, { years: mahomes.years, options: mahomes.options, apy: mahomes.apy });
+ok('Maye on his rookie deal > Maye on Mahomes\'s $90M contract', Market.playerTradeValue(maye, Y, cap) > Market.playerTradeValue(mayeOnBigDeal, Y, cap));
 ok('pick #1 > pick #32 > pick #100', Market.pickValue({ no: 1, year: Y }, Y) > Market.pickValue({ no: 32, year: Y }, Y) && Market.pickValue({ no: 32, year: Y }, Y) > Market.pickValue({ no: 100, year: Y }, Y));
 ok('future picks discounted', Market.pickValue({ round: 1, year: Y + 1 }, Y) < Market.pickValue({ round: 1, year: Y }, Y));
 ok('aging: 33-yr-old RB projects down', Market.projOvr({ ovr: 85, pot: 85, age: 29, pos: 'RB' }, 2) < 85);

@@ -24,7 +24,8 @@ function potInfo(p) {
 function potRange(i) { return i.exact ? '' + i.lo : i.lo + '–' + i.hi; }
 function potText(p) { var i = potInfo(p); return '<span class="pot">POT <b>' + i.grade + '</b> ' + potRange(i) + '</span>'; }
 function devBadge(p) { var t = potInfo(p).trait; return '<span class="dev dev-' + t.toLowerCase() + '">' + t + '</span>'; }
-function capLabel() { return fmtM(capOf(S.year)) + ' cap (projected)'; }
+function capProjected(y) { return !(BASE.season && y === BASE.season.year); }   // the 2026 cap is real; later years are projected
+function capLabel() { return fmtM(capOf(S.year)) + ' cap' + (capProjected(S.year) ? ' (projected)' : ''); }
 function teamLink(a) { return '<span class="tl-team">' + chip(a) + '<b>' + a + '</b></span>'; }
 function recStr(r) { return r.w + '-' + r.l + (r.t ? '-' + r.t : ''); }
 function yrsLeftStr(p) { var n = Cap.yearsLeft(p, S.year); return n ? n + ' yr' : '—'; }
@@ -187,6 +188,7 @@ function doContinue() {
 }
 function extraActions() {
   var out = [];
+  if (S.phase === 'resign') out.push(['Auto-manage offseason', 'auto-manage', null, '', 'The AI runs your offseason to week 1']);
   if (S.phase === 'fa') out.push(['Skip to the draft', 'skip-fa', null, '', 'Sims the rest of free agency']);
   if (S.phase === 'draft' && draftLeft()) out.push(['Auto-draft the rest', 'draft-auto', null, '', 'The AI makes your remaining picks']);
   if (S.phase === 'season' && S.week < WEEKS) out.push(['Sim to the playoffs', 'sim-season', null, '', 'Plays every remaining week']);
@@ -198,28 +200,29 @@ function extraActions() {
 function renderStart() {
   var has = hasSave();
   var h = '<div class="startpage"><div class="start"><h1 class="logo"><span>Franchise mode</span>Gridiron GM</h1>' +
-    '<p class="lead">Real rosters and contracts (OverTheCap via nflverse). Ratings come from 2024–26 stats and snaps. Your first season is ' + (window.DATA ? DATA.meta.startYear : 2027) + '.</p>' +
+    '<p class="lead">Real rosters, contracts and results (OverTheCap and nflverse). ' + (window.DATA && DATA.meta.season ? '<b class="realwk">Real results through week ' + DATA.meta.season.realWeek + ' of ' + DATA.meta.season.year + '</b>' + (DATA.meta.season.realGames > realThrough() ? ' (plus ' + plural(DATA.meta.season.realGames - realThrough(), 'game') + ' of week ' + (DATA.meta.season.realWeek + 1) + ')' : '') + '. ' : '') + 'Pick a team, then start from this week or from week 1.</p>' +
     '<div class="btns">' + (has ? '<button class="btn pri" data-act="continue-save">Continue saved game</button>' : '') + '<button class="btn" data-act="import">Import save</button></div>' + importInput() +
     '<h2 class="h3">Pick a team</h2><div class="teamgrid">' + TEAMS.slice().sort(byKey(function (t) { return t.name; })).map(function (t) {
       return '<button class="teambtn" style="' + teamVars(t.abbr) + '" data-act="pick-team" data-t="' + t.abbr + '"><b>' + t.abbr + '</b><span>' + esc(t.name) + '</span></button>';
     }).join('') + '</div>' + (has ? '<p class="note">Starting a new game replaces your saved game.</p>' : '') + '</div></div>';
   if (UI.pick) {
-    var t = TEAM[UI.pick], Y = window.DATA ? DATA.meta.startYear : 2027;
+    var t = TEAM[UI.pick], SY = DATA.meta.season.year, RW = DATA.meta.season.realWeek;
     h += '<div class="overlay" data-act="close-bg"><div class="sheet narrow rise" role="dialog" aria-modal="true"><div class="ps-hero slim" style="' + teamVars(UI.pick) + '"><button class="x" data-act="close-pick" aria-label="Close">✕</button><div class="tb big">' + UI.pick + '</div><div class="ps-id"><h2>' + esc(t.name) + '</h2><div class="ps-meta"><span>' + t.conf + ' ' + t.div + '</span><span>OVR ' + startRating(UI.pick) + '</span></div></div></div>' +
       '<div class="ps-body"><div class="modes">' +
-      '<button class="mode' + (UI.mode === 'quick' ? ' on' : '') + '" data-act="mode" data-m="quick"><b>Quick start · Week 1</b><span>The AI runs the ' + Y + ' offseason for every team, yours included: re-signings, fifth-year options, free agency, the draft and cuts to 53 under the cap. You take over at week 1 and get a recap.</span><em>Recommended</em></button>' +
-      '<button class="mode' + (UI.mode === 'full' ? ' on' : '') + '" data-act="mode" data-m="full"><b>Full offseason</b><span>Run the ' + Y + ' offseason yourself, starting in the re-sign window.</span></button></div>' +
+      '<button class="mode' + (UI.mode === 'current' ? ' on' : '') + '" data-act="mode" data-m="current"><b>Continue from this week</b><span>Real ' + SY + ' results through week ' + RW + ': real standings, records and stats to date, current rosters and contracts. The trade deadline has passed; you sim the rest of the season and the playoffs, then run the ' + (SY + 1) + ' offseason.</span><em>Real results through week ' + RW + '</em></button>' +
+      '<button class="mode' + (UI.mode === 'week1' ? ' on' : '') + '" data-act="mode" data-m="week1"><b>Start of ' + SY + ' · Week 1</b><span>Replay ' + SY + ' from week 1 with week-1 rosters and ratings built only from 2024–25 stats, so nothing from ' + SY + ' leaks in. Trades are open until the week-' + TRADE_DEADLINE_WEEK + ' deadline.</span></button></div>' +
       '<p class="seedrow"><label for="seed">Seed</label><input id="seed" inputmode="numeric" placeholder="random" size="10"><span>Optional. The same seed and the same moves replay the same league.</span></p>' +
-      '<div class="btns end"><button class="btn" data-act="close-pick">Back</button><button class="btn pri" data-act="new" data-t="' + UI.pick + '">' + (UI.mode === 'quick' ? 'Start at week 1' : 'Start the offseason') + ' ›</button></div></div></div></div>';
+      '<div class="btns end"><button class="btn" data-act="close-pick">Back</button><button class="btn pri" data-act="new" data-t="' + UI.pick + '">' + (UI.mode === 'week1' ? 'Start at week 1' : 'Start at week ' + (RW + 1)) + ' ›</button></div></div></div></div>';
   }
   $app().innerHTML = h;
 }
-function startRating(abbr) { if (!window.DATA) return ''; var ps = DATA.players.filter(function (p) { return p.team === abbr; }).sort(function (a, b) { return b.ovr - a.ovr; }); return ps.length ? Math.round(ps.slice(0, 22).reduce(function (s, p) { return s + p.ovr; }, 0) / Math.min(22, ps.length)) : ''; }
+function realThrough() { var g = DATA.meta.season.games, w = DATA.meta.season.realWeek; return g.filter(function (x) { return x[0] <= w; }).length; }
+function startRating(abbr) { if (!window.DATA) return ''; var ps = DATA.players.filter(function (p) { return p.t26 === abbr && !p.ir26; }).sort(function (a, b) { return b.ovr - a.ovr; }); return ps.length ? Math.round(ps.slice(0, 22).reduce(function (s, p) { return s + p.ovr; }, 0) / Math.min(22, ps.length)) : ''; }
 function summaryModal() {
   var f = function () {
     var s = S.quickSummary; if (!s) return '';
     var list = function (ids, right) { return ids.length ? ids.map(function (id) { var p = P(id); return '<div class="mini" data-act="player" data-id="' + id + '" role="button" tabindex="0">' + avatar(p, 40, { shield: false }) + '<div class="nm">' + esc(p.name) + '<small>' + p.pos + ' · ' + p.age + ' · ' + right(p) + '</small></div>' + shield(p.ovr, 30) + '</div>'; }).join('') : '<p class="muted">None.</p>'; };
-    var h = '<div class="ps-hero slim" style="' + teamVars(S.user) + '"><button class="x" data-act="close" aria-label="Close">✕</button><div class="ps-id"><h2>Your ' + s.year + ' offseason</h2><div class="ps-meta"><span>Ran on autopilot</span><span>' + roster(S.user).length + ' players</span><span>' + fmtM(fullSpace(S.user)) + ' cap room approx.</span></div></div></div><div class="ps-body recap">';
+    var h = '<div class="ps-hero slim" style="' + teamVars(S.user) + '"><button class="x" data-act="close" aria-label="Close">✕</button><div class="ps-id"><h2>Your ' + s.year + ' offseason</h2><div class="ps-meta"><span>Auto-managed</span><span>' + roster(S.user).length + ' players</span><span>' + fmtM(fullSpace(S.user)) + ' cap room approx.</span></div></div></div><div class="ps-body recap">';
     if (s.options.length) h += '<h3 class="sec">Fifth-year options</h3>' + s.options.map(function (o) { return '<p>' + esc(o.name) + ': <b>' + o.decision + '</b>.</p>'; }).join('');
     h += '<h3 class="sec">Draft picks <small>' + s.drafted.length + '</small></h3>' + list(s.drafted, function (p) { return 'round ' + p.draft[1] + ', pick ' + p.draft[2] + ' · ' + numStr(p); });
     h += '<h3 class="sec">Signed <small>' + (s.resigned.length + s.signed.length) + '</small></h3>' + list(s.resigned.concat(s.signed), function (p) { return (s.resigned.indexOf(p.id) >= 0 ? 're-signed · ' : '') + fmtM(Cap.capHit(p, S.year)) + ' · ' + yrsLeftStr(p); });
@@ -231,16 +234,27 @@ function summaryModal() {
   f.kind = 'dialog';
   return f;
 }
+// Two starts: the real 2026 season at the current week (data.json), or 2026 from week 1 (data_w1.json,
+// fetched only when chosen: week-1 rosters and ratings from 2024-25 stats).
 function startGame(abbr, mode) {
-  var sd = document.getElementById('seed');
-  newGame(DATA, abbr, sd ? sd.value.trim() : null); reindex();
-  UI.view = 'hub'; UI.trade = null; UI._preview = null; UI.pick = null; UI.last = {};
-  if (mode === 'quick') {
-    $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Quick start</span>Simulating the offseason</h1><p class="lead">Re-signings, free agency, the draft and cuts to 53 for all 32 teams…</p></div></div>';
-    setTimeout(function () { quickStart(); openModal(summaryModal()); render(); }, 30);
-    return true;
-  }
-  return false;
+  var sd = document.getElementById('seed'), seed = sd ? sd.value.trim() : null;
+  var go = function (data) { newGame(data, abbr, seed, mode); reindex(); UI.view = 'hub'; UI.trade = null; UI._preview = null; UI.pick = null; UI.last = {}; render(); };
+  if (mode !== 'week1') { go(DATA); return true; }
+  $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Start of ' + DATA.meta.season.year + '</span>Loading week-1 rosters</h1><p class="lead">Week-1 rosters and ratings from 2024–25 stats…</p></div></div>';
+  fetch('data_w1.json').then(function (r) { return r.json(); }).then(go).catch(function () { UI.pick = null; renderStart(); alert('Could not load the week-1 data. Check your connection and try again.'); });
+  return true;
+}
+// Auto-manage offseason: the AI runs your offseason (re-signing your best expiring players first) to week 1.
+function autoManageDialog() {
+  var f = function () {
+    var exp = expiring();
+    return '<div class="confirm-in"><h3>Auto-manage the ' + S.year + ' offseason?</h3><p class="muted">The AI runs your offseason to week 1, then shows a recap.</p><ul class="issues plain">' +
+      '<li><b>First, re-signings:</b> your expiring starters and anyone rated 75+ under 31, best first, at their asking price, as long as you stay under the cap with room to fill 53. Good young starters are worth restructuring for (no cuts).' + (exp.length ? ' Up for a new deal: ' + exp.slice(0, 3).map(function (p) { return esc(p.name) + ' (' + p.ovr + ')'; }).join(', ') + '.' : '') + '</li>' +
+      '<li><b>Fifth-year options</b>, then <b>free agency</b>, <b>the draft</b> and <b>final cuts to 53</b> under the cap.</li></ul>' +
+      '<div class="btns end"><button class="btn" data-act="close">Not now</button><button class="btn pri" data-act="auto-manage-go">Auto-manage to week 1 ›</button></div></div>';
+  };
+  f.kind = 'dialog';
+  return f;
 }
 
 // ---------- events ----------
@@ -253,7 +267,7 @@ function onClick(e) {
   if (a !== 'menu') UI.menu = null;
   var r;
   switch (a) {
-    case 'pick-team': UI.pick = d.t; UI.mode = 'quick'; renderStart(); return;
+    case 'pick-team': UI.pick = d.t; UI.mode = 'current'; renderStart(); return;
     case 'mode': UI.mode = d.m; var sv = document.getElementById('seed') ? document.getElementById('seed').value : ''; renderStart(); if (document.getElementById('seed')) document.getElementById('seed').value = sv; return;
     case 'close-pick': UI.pick = null; renderStart(); return;
     case 'new':
@@ -333,6 +347,12 @@ function onClick(e) {
       if (d.back === 'confirm') openModal(confirmDialog()); else { UI.modal = playerModal(d.id); UI.modal.kind = 'slide'; }
       break;
     case 'recap': if (S.quickSummary) openModal(summaryModal()); break;
+    case 'auto-manage': if (S.phase === 'resign') openModal(autoManageDialog()); break;
+    case 'auto-manage-go':
+      UI.modal = null;
+      $app().innerHTML = '<div class="startpage"><div class="start"><h1 class="logo"><span>Auto-manage</span>Running the ' + S.year + ' offseason</h1><p class="lead">Re-signings first, then free agency, the draft and final cuts to 53…</p></div></div>';
+      setTimeout(function () { autoManageOffseason(); UI.view = 'hub'; openModal(summaryModal()); render(); }, 30);
+      return;
     case 'export': exportSave(); return;
     case 'import': document.getElementById('importfile').click(); return;
     case 'draft-auto': draftUntilUser(true); UI.view = 'draft'; flash('Draft complete. Rookies are signed to slotted contracts. Continue runs final cuts and starts week 1.'); break;

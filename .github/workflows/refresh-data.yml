@@ -1,0 +1,49 @@
+# Weekly data refresh during the season: download the latest nflverse data (results, rosters, stats,
+# contracts), rebuild both start files, run every test, and commit + redeploy only if all of it passes.
+# Also runnable by hand: Actions tab -> "Weekly data refresh" -> Run workflow.
+name: Weekly data refresh
+on:
+  schedule:
+    - cron: '0 12 * 9-12,1-2 2'      # Tuesdays 12:00 UTC (7-8am US Eastern), September through February
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pyarrow
+        run: pip install pyarrow
+      - name: Refresh data, build, run all tests (stops on any failure)
+        env:
+          PYTHON: python
+          SKIP_OTC: '1'
+        run: ./refresh.sh
+      - name: Commit and push if the data changed
+        id: commit
+        run: |
+          git add -A src docs tests/fa_holdout_2026.json
+          if git diff --cached --quiet; then echo "No new data."; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          WEEK=$(node -e 'console.log(require("./src/data.json").meta.season.realWeek)')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Weekly data refresh: real results through week $WEEK"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: Redeploy GitHub Pages
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "Pages will build from the push."
