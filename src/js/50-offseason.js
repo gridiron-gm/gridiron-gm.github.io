@@ -24,13 +24,33 @@ function advance() {
       startDraft(); S.phase = 'draft';
       break;
     case 'draft':
+      // No preseason stop: after the draft every team (yours too) fills and cuts to 53 under the cap,
+      // then week 1 starts. Only if your roster can't get there does the game stop on Make room.
       aiFifthYearDecisions();
       finishDraft(); S.phase = 'preseason';
       aiFillRoster(ROSTER_MAX);
       aiTeams().forEach(function (a) { cutdown(a); autoDepth(a); });
-      news('Preseason: get to ' + ROSTER_MAX + ' players before week 1.');
-      break;
+      return finalCuts();
     case 'preseason':
+      return finalCuts();
+    case 'season': case 'playoffs':
+      return advanceSeason();
+  }
+  return { ok: true };
+}
+// Final cutdown, then the old preseason-to-week-1 steps. Stops (phase stays 'preseason') when your
+// roster can't reach 53 under the cap; Continue tries again after you make room.
+function finalCuts() {
+  var ar = userAutoRoster();
+  var over = fullSpace(S.user) < 0;
+  if (!S.autopilot && !S.finalCutsShown && (ar.missing || over)) {
+    S.finalCutsShown = true;
+    return { ok: false, cuts: true, auto: ar, msg: over ? 'Final cuts: you\'d be ' + fmtM(-fullSpace(S.user)) + ' over the cap at week 1. Make room, then press Continue.' : ar.msg + ' Make room, then press Continue.' };
+  }
+  var block = canAdvance();
+  if (block) return { ok: false, cuts: true, auto: ar, msg: block };
+  S.finalCutsShown = false;
+  (function () {
       aiFreeAgencyDay(); aiLateMarket(); aiExtensions();
       aiFillRoster(ROSTER_MAX);
       aiTeams().forEach(function (a) { cutdown(a); });
@@ -40,8 +60,24 @@ function advance() {
       aiTeams().forEach(function (a) { aiCapFix(a, 500); });
       aiLateMarket();                          // last pass: anyone a week-1 cap clean-up let go
       aiPrepay(15000);
+      // a week-1 cap clean-up can leave a team one short: top it back up to 53 (minimum deals, within its room)
+      aiTeams().forEach(topUp);
       resetSeason();
-      break;
+  })();
+  news('Week 1: rosters are set at ' + ROSTER_MAX + '.');
+  return { ok: true, auto: ar };
+}
+// Week-1 top-up: a team left short by its cap clean-up signs undrafted rookies at the minimum, only if it
+// already has the room (no cuts, no restructures).
+function topUp(abbr) {
+  var guard = 0, price = Cap.minSalary(FILLER_PRICE_EXP, S.year);
+  while (roster(abbr).length < ROSTER_MAX && fullSpace(abbr) >= price && guard++ < 10) {
+    var counts = {}; roster(abbr).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+    if (!sign(makeFiller(fillNeedPos(counts)), abbr, { years: 1, total: price, bonus: 0, gtd: 0 }, true).ok) break;
+  }
+}
+function advanceSeason() {
+  switch (S.phase) {
     case 'season':
       if (S.week < WEEKS) { simWeek(); aiInSeason(); break; }
       selectProBowls();
@@ -54,6 +90,41 @@ function advance() {
       break;
   }
   return { ok: true };
+}
+
+// Quick start: the AI runs the whole offseason for every team, yours included (re-signings, fifth-year
+// options, free agency, draft, cutdown to 53 under the cap). You take over at week 1. Returns a summary
+// of what happened to your team.
+function quickStart() {
+  var U = S.user, Y = S.year;
+  var before = {}; roster(U).forEach(function (p) { before[p.id] = 'roster'; });
+  S.players.forEach(function (p) { if (p.rights === U && !p.team) before[p.id] = 'expiring'; });
+  var opts = pendingOptions(U).map(function (p) { return p.id; });
+  S.autopilot = true;
+  var guard = 0;
+  while (S.phase !== 'season' && guard++ < 60) {
+    if (S.phase === 'draft' && S.draft && S.draft.i < S.draft.order.length) draftUntilUser(true);
+    var r = advance();
+    if (!r.ok) { userAutoRoster(); aiCapFix(U, 2000); if (S.phase !== 'preseason' && S.phase !== 'draft') break; }
+  }
+  S.autopilot = false;
+  var after = roster(U), sum = { year: Y, left: [], resigned: [], signed: [], drafted: [], options: [] };
+  Object.keys(before).forEach(function (id) {
+    var p = P(id); if (!p || p.team === U) return;
+    sum.left.push({ id: id, name: p.name, pos: p.pos, ovr: p.ovr, to: p.retired ? 'retired' : p.team || 'unsigned', was: before[id] });
+  });
+  after.forEach(function (p) {
+    if (before[p.id] === 'expiring') sum.resigned.push(p.id);
+    else if (!before[p.id]) (p.draft && p.draft[0] === Y && p.draft[1] ? sum.drafted : sum.signed).push(p.id);
+  });
+  opts.forEach(function (id) { var p = P(id); sum.options.push({ id: id, name: p.name, decision: p.fifth || (p.team === U && Cap.yearsLeft(p, Y) > 1 ? 'exercised' : 'declined') }); });
+  sum.left.sort(byKey(function (x) { return x.ovr; }, true));
+  var ovr = function (id) { return P(id).ovr; };
+  sum.resigned.sort(byKey(ovr, true)); sum.signed.sort(byKey(ovr, true));
+  sum.drafted.sort(byKey(function (id) { return P(id).draft[2]; }));
+  S.quickSummary = sum;
+  news('Quick start: the ' + Y + ' offseason ran on autopilot. Week 1 is next.', U);
+  return sum;
 }
 
 // in-season: AI teams replace injured starters with free agents now and then
@@ -130,6 +201,7 @@ function makePick(k, p) {
   p.team = null;
   var yrs = Cap.buildContract(deal, S.year, 0);
   p.team = k.owner; p.years = yrs; p.apy = Cap.apy(yrs); p.gtdTotal = deal.gtd; p.signed = S.year;
+  if (p.num == null) p.num = freeNumber(k.owner, p.pos);
   p.mv = Market.initialMarketShare(p, k.no);
   S.draft.made.push({ no: k.no, round: k.round, team: k.owner, id: p.id });
   S.draft.i++;

@@ -3,7 +3,9 @@ var S = null;          // the save
 var BASE = null;       // data.json meta
 
 var PHASES = ['resign', 'fa', 'draft', 'preseason', 'season', 'playoffs'];
-var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft', preseason: 'Preseason cutdown',
+// 'preseason' is no longer a stop in the year: it only exists while the final cutdown (right after the draft)
+// is stuck because the roster can't get to 53 under the cap. It keeps post-June 1 / top-51 rules for that moment.
+var PHASE_LABEL = { resign: 'Re-sign window', fa: 'Free agency', draft: 'Draft', preseason: 'Final cuts',
                     season: 'Regular season', playoffs: 'Playoffs' };
 var ROSTER_MAX_OFF = 90, ROSTER_MAX = 53, FA_DAYS = 6, TRADE_DEADLINE_WEEK = 9;
 
@@ -192,6 +194,7 @@ function sign(p, abbr, offer, silent) {
     if (excess > 0 && yrs.length > 1) Cap.prepay({ years: yrs }, S.year, Math.round(excess * 0.35), p.exp);
   }
   p.team = abbr; p.years = yrs; p.options = []; p.rights = null; p.rej = 0; p.signed = S.year; p.apy = Cap.apy(yrs);
+  if (p.num == null) p.num = freeNumber(abbr, p.pos);
   p.gtdTotal = Math.max(offer.gtd || 0, offer.bonus || 0);
   autoDepth(abbr);
   if (!silent || abbr === S.user || p.ovr >= 80)
@@ -581,6 +584,19 @@ function makeFiller(pos) {
             ovr: ovr, pot: ovr + RNG.int(0, 3), trait: randomTrait(), sub: {}, inj: 0, s: {}, car: {}, rej: 0, gen: true };
   S.players.push(p); if (S._idx) S._idx[p.id] = p;
   return p;
+}
+
+// Jersey numbers for players who don't have one yet (drafted rookies, generated depth): the first number
+// in the position's usual range that nobody on the team wears. Deterministic, no randomness.
+var NUMBER_RANGES = { QB: [[1, 19]], RB: [[20, 39], [1, 19], [40, 49], [80, 89]], WR: [[10, 19], [80, 89], [1, 9], [40, 49]], TE: [[80, 89], [40, 49], [1, 19]],
+  OT: [[60, 79], [50, 59]], IOL: [[60, 79], [50, 59]], EDGE: [[90, 99], [50, 59], [40, 49]], DL: [[90, 99], [50, 59]], LB: [[40, 59], [1, 19], [90, 99]],
+  CB: [[20, 39], [1, 19], [40, 49]], S: [[20, 49], [1, 19]], K: [[1, 19], [90, 99]], P: [[1, 19], [90, 99]], LS: [[40, 59], [90, 99]] };
+function freeNumber(abbr, pos) {
+  var used = {}; roster(abbr).forEach(function (q) { if (q.num != null) used[q.num] = true; });
+  var ranges = NUMBER_RANGES[pos] || [[1, 99]];
+  for (var r = 0; r < ranges.length; r++) for (var n = ranges[r][0]; n <= ranges[r][1]; n++) if (!used[n]) return n;
+  for (var m = 1; m <= 99; m++) if (!used[m]) return m;
+  return 0;
 }
 
 // The user's "auto roster" button: fill thin spots with minimum-salary players, then cut to 53.

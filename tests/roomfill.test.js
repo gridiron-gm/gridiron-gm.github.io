@@ -12,7 +12,7 @@ const strip = h => String(h).replace(/<[^>]+>/g, '');
 function scenario(label, overAsk) {
   const ctx = { console, Math, Date, JSON }; vm.createContext(ctx);
   for (const f of fs.readdirSync(path.join(__dirname, '../src/js')).sort())
-    if (/^(00|10|20|30|40|50|55|60)-/.test(f)) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', f), 'utf8').replace(/^if \(typeof module.*$/m, ''), ctx, { filename: f });
+    if (/^(00|05|10|20|30|40|50|55|6\d)-/.test(f)) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/js', f), 'utf8').replace(/^if \(typeof module.*$/m, ''), ctx, { filename: f });
   ctx.DATA = JSON.parse(fs.readFileSync(path.join(__dirname, '../src/data.json'), 'utf8'));
   const run = c => vm.runInContext(c, ctx);
   console.log(label);
@@ -35,9 +35,9 @@ function scenario(label, overAsk) {
   run('while (S.phase === "fa") advance(); draftUntilUser(true);');
   const maye = run('S.players.filter(function(p){return p.name==="Drake Maye"})[0].id');
   ok(label + ': Maye option exercised', run(`decideFifthYear(P("${maye}"), true).ok`));
-  run('advance();');
-  ok(label + ': in preseason', run('S.phase') === 'preseason');
-  const ar = run('userAutoRoster()');
+  // leaving the draft runs final cuts automatically (auto-fill + cut to 53); it only stops if that falls short
+  const r = run('advance()'), ar = r.auto;
+  ok(label + ': final cuts ran on leaving the draft', !!ar && (r.ok ? run('S.phase') === 'season' : run('S.phase') === 'preseason' && r.cuts));
   const n = run('roster(S.user).length'), room = run('fullSpace(S.user)');
   console.log(`  offer warning: ${warn ? warn[0] : '(none)'} | auto-fill: ${ar.msg} (${n} players, ${run('fmtM(fullSpace(S.user))')} room at week-1 counting)`);
   ok(label + ': offer estimate matches the real auto-fill shortfall (within $100K)', Math.abs(offerShort - ar.short) <= 100, offerShort + ' vs ' + ar.short);
@@ -55,7 +55,8 @@ ok('A: no under-53 warning on the to-do list', !/Roster is under 53/.test(strip(
 const B = scenario('B: Byard at $2M/yr over his ask', 2000);
 ok('B: offer screen warns "This leaves you $X short of filling your roster"', !!B.warn);
 ok('B: auto-fill reports "Couldn\'t fill N spots: $X short"', B.ar.missing > 0 && /^Couldn't fill \d+ spots?: \$[\d.]+[MK] short\.$/.test(B.ar.msg), B.ar.msg);
-ok('B: preseason to-do warns the roster is under 53', /Roster is under 53/.test(strip(B.run('VIEWS.hub()'))));
+ok('B: stopped at final cuts, Moves opens Make room', B.run('S.phase') === 'preseason' && B.run('screenOpen("cuts")'));
+ok('B: final-cuts to-do warns the roster is under 53', /Roster is under 53/.test(strip(B.run('VIEWS.hub()'))));
 const mr = B.run('makeRoomOptions(S.user)');
 ok('B: make-room screen lists restructures and cuts', mr.restructures.length > 0 && mr.cuts.length > 0 && /Cut options/.test(strip(B.run('makeRoomModal()()'))));
 ok('B: cut options never include players rated 80+', mr.cuts.every(x => x.p.ovr < 80));
@@ -80,6 +81,8 @@ B.run(`restructurePlayer(P("${best.p.id}"), Cap.restructureMax(P("${best.p.id}")
 const ar2 = B.run('userAutoRoster()');
 console.log('  after restructuring ' + best.p.name + ': ' + ar2.msg);
 ok('B: following the advice fills the roster', ar2.missing === 0 && B.run('fullSpace(S.user)') >= 0, ar2.msg);
+const r2 = B.run('advance()');
+ok('B: after making room, Continue starts week 1', r2.ok && B.run('S.phase') === 'season' && B.run('S.week') === 0 && B.run('roster(S.user).length') === 53);
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

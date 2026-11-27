@@ -26,28 +26,28 @@ ok('other teams have 2024 first-rounders to decide on', others > 10);
 run(`decideFifthYear(P("${maye.id}"), true);`);
 ok('exercised: 2028 row, fully guaranteed', run(`(function(){ var r = Cap.row(P("${maye.id}"), 2028); return !!r && r.gtd === r.cap && r.cap > 0; })()`));
 ok('window closes for him after deciding', !run(`fifthYearInfo(P("${maye.id}"))`));
-run('advance();');                                                       // leave the draft: AI decides
-ok('moved to preseason', run('S.phase') === 'preseason');
+// ---------- top-51 (offseason) ----------
+ok('the offseason counts the top 51', run('top51(S.year)') === true);
+const t51 = run(`(function(){ var n = roster("NE").length; return { n: n, top: committed("NE"), all: Cap.teamCommitted(S.players, T("NE"), S.year, false) }; })()`);
+ok('with ' + t51.n + ' players, top-51 commitment <= full commitment', t51.top <= t51.all && (t51.n <= 51 || t51.top < t51.all));
+
+// ---------- leaving the draft: final cuts happen automatically, then week 1 (no preseason stop) ----------
+const left = run('(function(){ var r = advance(); if (!r.ok && S.phase === "preseason") { userAutoRoster(); aiCapFix("NE", 2000); r = advance(); } return { ok: r.ok, phase: S.phase, week: S.week }; })()');
+ok('leaving the draft goes straight to week 1', left.ok && left.phase === 'season' && left.week === 0);
 ok('every AI team decided', run('TEAMS.every(function(t){ return pendingOptions(t.abbr).length === 0 })'));
 const ex = run('S.players.filter(function(p){return p.fifth==="exercised"}).length'), de = run('S.players.filter(function(p){return p.fifth==="declined"}).length');
 console.log('  2024 class options: ' + ex + ' exercised, ' + de + ' declined');
 ok('AI both exercises and declines', ex > 3 && de > 0);
-
-// ---------- top-51 ----------
-ok('preseason counts the top 51', run('top51(S.year)') === true);
-const t51 = run(`(function(){ userAutoRoster(); var n = roster("NE").length; return { n: n, top: committed("NE"), all: Cap.teamCommitted(S.players, T("NE"), S.year, false) }; })()`);
-ok('with ' + t51.n + ' players, top-51 commitment <= full commitment', t51.top <= t51.all && (t51.n <= 51 || t51.top < t51.all));
-// late market fairness: an unsigned 78+ player under 30 takes your prove-it offer on the AI's terms
+ok('your roster was cut and filled to 53 automatically', run('roster("NE").length') === 53 && run('fullSpace("NE")') >= 0);
+ok('regular season: every contract counts', run('top51(S.year)') === false && run('committed("NE")') === run('Cap.teamCommitted(S.players, T("NE"), S.year, false)'));
+ok('future years still use top 51', run('top51(S.year + 1)') === true);
+ok('AI teams are cap compliant with every contract counted', run('TEAMS.every(function(t){ return t.abbr === "NE" || space(t.abbr) >= 0 })'));
+// late market fairness: an unsigned 78+ player under 30 takes your prove-it offer on the AI's in-season terms
 run(`var LM = S.players.filter(function (p) { return p.team && p.team !== 'NE' && p.age < 30 && p.ovr >= 80; })[0];
   LM.team = null; LM.years = []; LM.rights = null; var LMASK = Market.demand(LM, marketCap(), S.year).apy;
   function lmOffer(share) { var t = Math.round(LMASK * share); return Market.evaluate(LM, { years: 1, total: t, bonus: 0, gtd: Math.round(t / 2) }, offerCtx(LM, 'NE')); }`);
-ok('preseason: unsigned 80+ player under 30 accepts 25% of his ask from you', run('lmOffer(0.26).accept'));
-ok('preseason: but not 20%', !run('lmOffer(0.20).accept'));
-run('userAutoRoster(); advance();');
-ok('regular season: every contract counts', run('S.phase') === 'season' && run('top51(S.year)') === false && run('committed("NE")') === run('Cap.teamCommitted(S.players, T("NE"), S.year, false)'));
-ok('future years still use top 51', run('top51(S.year + 1)') === true);
-ok('in season: last-resort 12% floor applies to your offers too', run('LM.team ? true : lmOffer(0.13).accept'));
-ok('AI teams are cap compliant with every contract counted', run('TEAMS.every(function(t){ return t.abbr === "NE" || space(t.abbr) >= 0 })'));
+ok('in season: unsigned 80+ player under 30 accepts 13% of his ask from you (the AI\'s 12% floor)', run('lmOffer(0.13).accept'));
+ok('in season: but not 10%', !run('lmOffer(0.10).accept'));
 
 // ---------- your players' ratings: aging and performance only ----------
 run('while (S.phase === "season") advance(); while (!S.playoffs.champ) advance();');

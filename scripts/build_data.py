@@ -55,6 +55,13 @@ print('rosters from', ROSTER_FILE)
 for r in csv.DictReader(open(os.path.join(RAW, ROSTER_FILE))):
     if r['status'] in ('CUT', 'RET', 'TRD', 'TRT'): continue
     roster[r['gsis_id']] = r
+# jersey numbers (latest week a player appears with one; used for the player avatars)
+jersey = {}
+for r in csv.DictReader(open(os.path.join(RAW, ROSTER_FILE))):
+    n = (r.get('jersey_number') or '').strip()
+    if r['gsis_id'] and n:
+        w = int(r.get('week') or 0)
+        if r['gsis_id'] not in jersey or w >= jersey[r['gsis_id']][0]: jersey[r['gsis_id']] = (w, int(float(n)))
 
 players_xw = {}
 for r in csv.DictReader(open(os.path.join(RAW, 'players.csv'))):
@@ -254,6 +261,7 @@ for g, c in contracts.items():
         'years': years, 'options': options,
         'status': (r or {}).get('status', 'FA'),
     }
+    if g in jersey: p['num'] = jersey[g][1]
     p['_f'] = features(g, pos)
     p['_fp'] = features(g, pos, ((2024, 0.4), (2025, 0.6)))
     players.append(p)
